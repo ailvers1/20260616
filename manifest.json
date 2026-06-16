@@ -1,0 +1,31 @@
+{
+  "products": [
+    {
+      "id": "ai_kiosk_white",
+      "name": "AI 키오스크 화이트",
+      "category": "키오스크",
+      "file": "models/ai_kiosk_white.glb",
+      "width": 0.957,
+      "height": 1.9,
+      "depth": 0.498
+    },
+    {
+      "id": "general_stand",
+      "name": "일반 스탠드",
+      "category": "스탠드",
+      "file": "models/general_stand.glb",
+      "width": 0.742,
+      "height": 1.9,
+      "depth": 0.498
+    },
+    {
+      "id": "photo_kiosk_black",
+      "name": "포토 키오스크 블랙",
+      "category": "키오스크",
+      "file": "models/photo_kiosk_black.glb",
+      "width": 0.562,
+      "height": 1.907,
+      "depth": 0.757
+    }
+  ]
+}
