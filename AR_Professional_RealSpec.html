@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <title>SYSMATE AR 제품 배치</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="startScreen">
+    <div class="startLogo">📱✨</div>
+    <h1>SYSMATE AR</h1>
+    <p>실제 제품 GLB 모델을 공간에 배치해보세요.</p>
+    <button id="startBtnBig">AR 시작</button>
+    <div class="notice">
+      Android Chrome 기준 WebXR AR을 지원합니다.<br />
+      iPhone은 별도 USDZ/Quick Look 방식이 필요할 수 있습니다.
+    </div>
+  </div>
+
+  <div id="topBar">
+    <div class="row">
+      <label for="productSelect">제품 선택</label>
+      <select id="productSelect"></select>
+      <button id="loadBtn">모델 준비</button>
+    </div>
+
+    <div class="row">
+      <label>
+        <input type="checkbox" id="lockScale" checked />
+        실측 고정
+      </label>
+
+      <span>스케일</span>
+      <input id="scaleRange" type="range" min="50" max="150" value="100" disabled />
+      <span id="scaleValue">100%</span>
+    </div>
+
+    <div class="row">
+      <button id="placeBtn">📍 배치</button>
+      <button id="captureBtn">📸 캡처</button>
+      <button id="clearBtn">🗑️ 전체삭제</button>
+    </div>
+  </div>
+
+  <div id="editPanel">
+    <div id="editTitle">선택된 제품 없음</div>
+
+    <div class="pad">
+      <button id="moveForward">▲</button>
+      <button id="moveLeft">◀</button>
+      <button id="moveRight">▶</button>
+      <button id="moveBack">▼</button>
+    </div>
+
+    <div class="row small">
+      <button id="rotateLeft">⟲ 회전</button>
+      <button id="rotateRight">회전 ⟳</button>
+    </div>
+
+    <div class="row small">
+      <button id="heightDown">높이 -</button>
+      <button id="heightUp">높이 +</button>
+    </div>
+  </div>
+
+  <div id="reticle"></div>
+  <div id="toast"></div>
+  <div id="captureStrip"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
