@@ -6,15 +6,18 @@ const $ = (id) => document.getElementById(id);
 const dom = {
   startScreen: $("startScreen"),
   startBtnBig: $("startBtnBig"),
+
   topBar: $("topBar"),
   productSelect: $("productSelect"),
   loadBtn: $("loadBtn"),
   placeBtn: $("placeBtn"),
   captureBtn: $("captureBtn"),
   clearBtn: $("clearBtn"),
+
   lockScale: $("lockScale"),
   scaleRange: $("scaleRange"),
   scaleValue: $("scaleValue"),
+
   reticle: $("reticle"),
   editPanel: $("editPanel"),
   editTitle: $("editTitle"),
@@ -39,6 +42,8 @@ let reticleObject;
 
 let hitTestSource = null;
 let hitTestSourceRequested = false;
+let viewerSpace = null;
+let localSpace = null;
 
 let products = [];
 let currentProduct = null;
@@ -51,12 +56,17 @@ const modelCache = new Map();
 init();
 
 async function init() {
-  setupThree();
-  setupLights();
-  setupReticle();
-  bindEvents();
-  await loadManifest();
-  animate();
+  try {
+    setupThree();
+    setupLights();
+    setupReticle();
+    bindEvents();
+    await loadManifest();
+    animate();
+  } catch (err) {
+    console.error("초기화 실패:", err);
+    alert("초기화 실패: " + err.message);
+  }
 }
 
 function setupThree() {
@@ -68,7 +78,17 @@ function setupThree() {
 
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
+
   renderer.xr.enabled = true;
+
+  /*
+    중요:
+    일부 브라우저/기기에서 기본 reference space인 local-floor를 지원하지 않아
+    "This device does not support the requested reference space type" 오류가 날 수 있음.
+    그래서 local 기준으로 고정.
+  */
+  renderer.xr.setReferenceSpaceType("local");
+
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   document.body.appendChild(renderer.domElement);
@@ -106,6 +126,7 @@ function setupReticle() {
 
   reticleObject.matrixAutoUpdate = false;
   reticleObject.visible = false;
+
   scene.add(reticleObject);
 }
 
@@ -139,7 +160,10 @@ function bindEvents() {
     dom.productSelect.addEventListener("change", () => {
       const id = dom.productSelect.value;
       currentProduct = products.find((p) => p.id === id) || null;
-      showToast(`${currentProduct?.name || "제품"} 선택됨`);
+
+      if (currentProduct) {
+        showToast(`${currentProduct.name} 선택됨`);
+      }
     });
   }
 
@@ -152,9 +176,12 @@ function bindEvents() {
   if (dom.scaleRange) {
     dom.scaleRange.addEventListener("input", () => {
       const pct = Number(dom.scaleRange.value);
-      dom.scaleValue.textContent = `${pct}%`;
 
-      if (selectedObject && !dom.lockScale.checked) {
+      if (dom.scaleValue) {
+        dom.scaleValue.textContent = `${pct}%`;
+      }
+
+      if (selectedObject && dom.lockScale && !dom.lockScale.checked) {
         const s = pct / 100;
         selectedObject.scale.setScalar(s);
       }
@@ -180,11 +207,20 @@ async function loadManifest() {
     const res = await fetch("manifest.json", { cache: "no-store" });
 
     if (!res.ok) {
-      throw new Error(`manifest.json 로드 실패: ${res.status}`);
+      throw new Error(`manifest.json 로드 실패: HTTP ${res.status}`);
     }
 
     const data = await res.json();
-    products = data.products || [];
+
+    if (!Array.isArray(data.products)) {
+      throw new Error("manifest.json 안에 products 배열이 없습니다.");
+    }
+
+    products = data.products;
+
+    if (!dom.productSelect) {
+      throw new Error("#productSelect 요소가 없습니다.");
+    }
 
     dom.productSelect.innerHTML = "";
 
@@ -199,12 +235,14 @@ async function loadManifest() {
 
     if (currentProduct) {
       dom.productSelect.value = currentProduct.id;
+      showToast("제품 목록 로드 완료");
+    } else {
+      showToast("등록된 제품이 없습니다.");
     }
-
-    showToast("제품 목록 로드 완료");
   } catch (err) {
-    console.error(err);
-    showToast("manifest.json을 불러오지 못했습니다.");
+    console.error("manifest 로드 오류:", err);
+    alert("manifest.json 로드 오류: " + err.message);
+    showToast("manifest.json 로드 실패");
   }
 }
 
@@ -234,21 +272,30 @@ async function startAR() {
 
     await renderer.xr.setSession(session);
 
-    dom.startScreen.classList.add("hidden");
-    dom.topBar.classList.add("show");
-    dom.reticle.style.display = "block";
+    dom.startScreen?.classList.add("hidden");
+    dom.topBar?.classList.add("show");
+
+    if (dom.reticle) {
+      dom.reticle.style.display = "block";
+    }
 
     showToast("AR 시작됨. 바닥을 비춰주세요.");
 
     session.addEventListener("end", () => {
       hitTestSourceRequested = false;
       hitTestSource = null;
-      reticleObject.visible = false;
-      dom.reticle.style.display = "none";
-      dom.topBar.classList.remove("show");
-      dom.startScreen.classList.remove("hidden");
-    });
+      viewerSpace = null;
+      localSpace = null;
 
+      reticleObject.visible = false;
+
+      if (dom.reticle) {
+        dom.reticle.style.display = "none";
+      }
+
+      dom.topBar?.classList.remove("show");
+      dom.startScreen?.classList.remove("hidden");
+    });
   } catch (err) {
     console.error("AR 시작 실패:", err);
     alert("AR 시작 실패: " + err.message);
@@ -267,8 +314,14 @@ async function preloadCurrentProduct() {
     await loadModel(currentProduct);
     showToast("모델 준비 완료");
   } catch (err) {
-    console.error(err);
-    showToast("모델 로드 실패. 경로와 파일명을 확인하세요.");
+    console.error("모델 로드 실패:", err);
+    alert(
+      "모델 로드 실패:\n" +
+      currentProduct.file +
+      "\n\n파일명과 manifest.json 경로를 확인하세요.\n\n" +
+      err.message
+    );
+    showToast("모델 로드 실패");
   }
 }
 
@@ -287,14 +340,27 @@ async function placeCurrentProduct() {
     const model = await loadModel(currentProduct);
 
     model.matrixAutoUpdate = true;
+
     model.position.setFromMatrixPosition(reticleObject.matrix);
     model.quaternion.setFromRotationMatrix(reticleObject.matrix);
+
+    /*
+      제품 GLB는 이미 bottom-center / upright 기준으로 정리되어 있다는 전제.
+      만약 누워서 나오면 manifest에 rotationXDeg / rotationYDeg / rotationZDeg 값을 추가해서 보정 가능.
+    */
+    if (currentProduct.rotationXDeg) {
+      model.rotation.x += THREE.MathUtils.degToRad(currentProduct.rotationXDeg);
+    }
 
     if (currentProduct.rotationYDeg) {
       model.rotation.y += THREE.MathUtils.degToRad(currentProduct.rotationYDeg);
     }
 
-    if (!dom.lockScale.checked) {
+    if (currentProduct.rotationZDeg) {
+      model.rotation.z += THREE.MathUtils.degToRad(currentProduct.rotationZDeg);
+    }
+
+    if (dom.lockScale && !dom.lockScale.checked && dom.scaleRange) {
       const s = Number(dom.scaleRange.value) / 100;
       model.scale.setScalar(s);
     }
@@ -304,11 +370,13 @@ async function placeCurrentProduct() {
 
     scene.add(model);
     placedObjects.push(model);
+
     selectObject(model);
 
     showToast(`${currentProduct.name} 배치 완료`);
   } catch (err) {
-    console.error(err);
+    console.error("모델 배치 실패:", err);
+    alert("모델 배치 실패: " + err.message);
     showToast("모델 배치 실패");
   }
 }
@@ -330,6 +398,11 @@ function loadModel(product) {
           child.castShadow = true;
           child.receiveShadow = true;
 
+          /*
+            중요:
+            여기서 material을 새로 만들면 GLB 원래 색상/텍스처가 날아감.
+            그래서 기존 재질을 그대로 유지한다.
+          */
           if (child.material) {
             if (Array.isArray(child.material)) {
               child.material.forEach(prepareMaterial);
@@ -343,7 +416,10 @@ function loadModel(product) {
         resolve(cloneModel(root));
       },
       undefined,
-      reject
+      (err) => {
+        console.error(`GLB 로드 실패: ${product.file}`, err);
+        reject(err);
+      }
     );
   });
 }
@@ -352,6 +428,11 @@ function prepareMaterial(material) {
   if (material.map) {
     material.map.colorSpace = THREE.SRGBColorSpace;
     material.map.needsUpdate = true;
+  }
+
+  if (material.emissiveMap) {
+    material.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+    material.emissiveMap.needsUpdate = true;
   }
 
   material.needsUpdate = true;
@@ -377,17 +458,30 @@ function selectObject(obj) {
   selectedObject = obj;
 
   if (!obj) {
-    dom.editPanel.classList.remove("show");
-    dom.editTitle.textContent = "선택된 제품 없음";
+    dom.editPanel?.classList.remove("show");
+
+    if (dom.editTitle) {
+      dom.editTitle.textContent = "선택된 제품 없음";
+    }
+
     return;
   }
 
-  dom.editPanel.classList.add("show");
-  dom.editTitle.textContent = obj.userData.productName || "선택된 제품";
+  dom.editPanel?.classList.add("show");
+
+  if (dom.editTitle) {
+    dom.editTitle.textContent = obj.userData.productName || "선택된 제품";
+  }
 
   const scalePct = Math.round(obj.scale.x * 100);
-  dom.scaleRange.value = scalePct;
-  dom.scaleValue.textContent = `${scalePct}%`;
+
+  if (dom.scaleRange) {
+    dom.scaleRange.value = scalePct;
+  }
+
+  if (dom.scaleValue) {
+    dom.scaleValue.textContent = `${scalePct}%`;
+  }
 }
 
 function selectByPointer(event) {
@@ -454,6 +548,7 @@ function clearAll() {
 
   placedObjects = [];
   selectObject(null);
+
   showToast("전체 삭제 완료");
 }
 
@@ -463,15 +558,19 @@ function captureScreen() {
 
     const img = document.createElement("img");
     img.src = url;
+
     img.addEventListener("click", () => {
       const win = window.open();
-      win.document.write(`<img src="${url}" style="max-width:100%">`);
+
+      if (win) {
+        win.document.write(`<img src="${url}" style="max-width:100%">`);
+      }
     });
 
-    dom.captureStrip.prepend(img);
+    dom.captureStrip?.prepend(img);
     showToast("캡처 완료");
   } catch (err) {
-    console.error(err);
+    console.error("캡처 실패:", err);
     showToast("캡처 실패");
   }
 }
@@ -482,55 +581,94 @@ function animate() {
 
 function render(timestamp, frame) {
   if (frame) {
-    const session = renderer.xr.getSession();
-
-    if (!hitTestSourceRequested) {
-      session.requestReferenceSpace("viewer").then((referenceSpace) => {
-        session.requestHitTestSource({ space: referenceSpace }).then((source) => {
-          hitTestSource = source;
-        });
-      });
-
-      session.addEventListener("end", () => {
-        hitTestSourceRequested = false;
-        hitTestSource = null;
-      });
-
-      hitTestSourceRequested = true;
-    }
-
-    if (hitTestSource) {
-      const referenceSpace = renderer.xr.getReferenceSpace();
-      const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-      if (hitTestResults.length) {
-        const hit = hitTestResults[0];
-        const pose = hit.getPose(referenceSpace);
-
-        reticleObject.visible = true;
-        reticleObject.matrix.fromArray(pose.transform.matrix);
-        dom.reticle.style.display = "block";
-      } else {
-        reticleObject.visible = false;
-        dom.reticle.style.display = "none";
-      }
-    }
+    handleHitTest(frame);
   }
 
   renderer.render(scene, camera);
 }
 
+function handleHitTest(frame) {
+  const session = renderer.xr.getSession();
+
+  if (!session) return;
+
+  if (!hitTestSourceRequested) {
+    hitTestSourceRequested = true;
+
+    /*
+      hit-test source는 viewer space 기반으로 요청하는 게 일반적.
+      실패하면 오류를 띄우되 앱 전체가 죽지 않게 처리.
+    */
+    session.requestReferenceSpace("viewer")
+      .then((space) => {
+        viewerSpace = space;
+        return session.requestHitTestSource({ space: viewerSpace });
+      })
+      .then((source) => {
+        hitTestSource = source;
+      })
+      .catch((err) => {
+        console.error("hit-test source 생성 실패:", err);
+        showToast("바닥 인식 준비 실패: " + err.message);
+      });
+
+    session.addEventListener("end", () => {
+      hitTestSourceRequested = false;
+      hitTestSource = null;
+      viewerSpace = null;
+      localSpace = null;
+    });
+  }
+
+  if (!hitTestSource) return;
+
+  const referenceSpace = renderer.xr.getReferenceSpace();
+
+  if (!referenceSpace) return;
+
+  const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+  if (hitTestResults.length) {
+    const hit = hitTestResults[0];
+    const pose = hit.getPose(referenceSpace);
+
+    if (pose) {
+      reticleObject.visible = true;
+      reticleObject.matrix.fromArray(pose.transform.matrix);
+
+      if (dom.reticle) {
+        dom.reticle.style.display = "block";
+      }
+    }
+  } else {
+    reticleObject.visible = false;
+
+    if (dom.reticle) {
+      dom.reticle.style.display = "none";
+    }
+  }
+}
+
 function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+
+  if (camera) {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  }
 }
 
 function showToast(message) {
+  if (!dom.toast) {
+    console.log("[toast]", message);
+    return;
+  }
+
   dom.toast.textContent = message;
   dom.toast.style.display = "block";
 
   clearTimeout(showToast.timer);
+
   showToast.timer = setTimeout(() => {
     dom.toast.style.display = "none";
   }, 1800);
