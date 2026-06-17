@@ -49,13 +49,11 @@ let currentProduct = null;
 let selectedObject = null;
 let placedObjects = [];
 
-/*
-  중요:
-  배치 버튼을 눌렀을 때만 true.
-  화면 터치 1회로 배치 후 false로 바꿔서
-  이동/회전 버튼 클릭 시 새 모델이 복사 생성되는 문제를 막음.
-*/
 let isPlacementMode = false;
+
+const MOVE_STEP = 0.05;
+const HEIGHT_STEP = 0.05;
+const ROTATE_STEP = THREE.MathUtils.degToRad(15);
 
 const gltfLoader = new GLTFLoader();
 const modelCache = new Map();
@@ -88,10 +86,7 @@ function setupThree() {
 
   renderer.xr.enabled = true;
 
-  /*
-    일부 기기/브라우저에서 local-floor 미지원 오류 방지.
-    삼성 인터넷/일부 안드로이드 브라우저에서 특히 필요.
-  */
+  // 일부 안드로이드/삼성 인터넷에서 local-floor 미지원 오류 방지
   renderer.xr.setReferenceSpaceType("local");
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -103,10 +98,8 @@ function setupThree() {
 
   controller = renderer.xr.getController(0);
 
-  /*
-    AR 화면 터치 select 이벤트.
-    배치 대기 모드일 때만 제품을 놓는다.
-  */
+  // AR 화면 터치 select 이벤트.
+  // 배치 대기 모드일 때만 제품을 놓는다.
   controller.addEventListener("select", () => {
     if (!isPlacementMode) return;
 
@@ -153,11 +146,6 @@ function bindEvents() {
     await preloadCurrentProduct();
   });
 
-  /*
-    배치 버튼은 바로 배치하지 않고,
-    배치 대기 모드만 켠다.
-    실제 배치는 AR 화면 터치 select 이벤트에서 1회 실행.
-  */
   safeClick("placeBtn", (event) => {
     stopUIEvent(event);
 
@@ -181,44 +169,47 @@ function bindEvents() {
     clearAll();
   });
 
+  // 카메라 기준 방향키 이동
   safeClick("moveForward", (event) => {
     stopUIEvent(event);
-    moveSelected(0, -0.05);
+    moveSelectedByCamera("forward", MOVE_STEP);
   });
 
   safeClick("moveBack", (event) => {
     stopUIEvent(event);
-    moveSelected(0, 0.05);
+    moveSelectedByCamera("back", MOVE_STEP);
   });
 
   safeClick("moveLeft", (event) => {
     stopUIEvent(event);
-    moveSelected(-0.05, 0);
+    moveSelectedByCamera("left", MOVE_STEP);
   });
 
   safeClick("moveRight", (event) => {
     stopUIEvent(event);
-    moveSelected(0.05, 0);
+    moveSelectedByCamera("right", MOVE_STEP);
   });
 
+  // 제자리 회전
   safeClick("rotateLeft", (event) => {
     stopUIEvent(event);
-    rotateSelected(THREE.MathUtils.degToRad(15));
+    rotateSelected(ROTATE_STEP);
   });
 
   safeClick("rotateRight", (event) => {
     stopUIEvent(event);
-    rotateSelected(THREE.MathUtils.degToRad(-15));
+    rotateSelected(-ROTATE_STEP);
   });
 
+  // 높이 조절
   safeClick("heightUp", (event) => {
     stopUIEvent(event);
-    heightSelected(0.05);
+    heightSelected(HEIGHT_STEP);
   });
 
   safeClick("heightDown", (event) => {
     stopUIEvent(event);
-    heightSelected(-0.05);
+    heightSelected(-HEIGHT_STEP);
   });
 
   if (dom.productSelect) {
@@ -258,10 +249,6 @@ function bindEvents() {
     });
   }
 
-  /*
-    UI가 아닌 캔버스 영역 터치 시, 기존 배치된 제품 선택용.
-    UI 버튼 터치는 무시한다.
-  */
   renderer.domElement.addEventListener("pointerdown", selectByPointer);
 }
 
@@ -431,10 +418,6 @@ async function placeCurrentProduct() {
     model.position.setFromMatrixPosition(reticleObject.matrix);
     model.quaternion.setFromRotationMatrix(reticleObject.matrix);
 
-    /*
-      제품 GLB는 bottom-center / upright 기준으로 정리되어 있다는 전제.
-      누워서 나오면 manifest.json에 rotationXDeg/YDeg/ZDeg 넣어서 보정 가능.
-    */
     if (currentProduct.rotationXDeg) {
       model.rotation.x += THREE.MathUtils.degToRad(currentProduct.rotationXDeg);
     }
@@ -485,11 +468,6 @@ function loadModel(product) {
           child.castShadow = true;
           child.receiveShadow = true;
 
-          /*
-            중요:
-            material을 새로 만들면 GLB 원래 색상/텍스처가 날아감.
-            기존 재질 그대로 유지.
-          */
           if (child.material) {
             if (Array.isArray(child.material)) {
               child.material.forEach(prepareMaterial);
@@ -572,9 +550,6 @@ function selectObject(obj) {
 }
 
 function selectByPointer(event) {
-  /*
-    UI 버튼 터치는 3D 선택/배치로 넘기지 않는다.
-  */
   if (
     event.target.closest("#topBar") ||
     event.target.closest("#editPanel") ||
@@ -613,14 +588,41 @@ function selectByPointer(event) {
   selectObject(target);
 }
 
-function moveSelected(dx, dz) {
+function moveSelectedByCamera(direction, distance) {
   if (!selectedObject) {
     showToast("이동할 제품을 선택하세요.");
     return;
   }
 
-  selectedObject.position.x += dx;
-  selectedObject.position.z += dz;
+  const cameraDirection = new THREE.Vector3();
+  camera.getWorldDirection(cameraDirection);
+
+  cameraDirection.y = 0;
+
+  if (cameraDirection.lengthSq() === 0) {
+    showToast("카메라 방향을 읽지 못했습니다.");
+    return;
+  }
+
+  cameraDirection.normalize();
+
+  const rightDirection = new THREE.Vector3();
+  rightDirection.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0));
+  rightDirection.normalize();
+
+  const moveVector = new THREE.Vector3();
+
+  if (direction === "forward") {
+    moveVector.copy(cameraDirection).multiplyScalar(distance);
+  } else if (direction === "back") {
+    moveVector.copy(cameraDirection).multiplyScalar(-distance);
+  } else if (direction === "left") {
+    moveVector.copy(rightDirection).multiplyScalar(-distance);
+  } else if (direction === "right") {
+    moveVector.copy(rightDirection).multiplyScalar(distance);
+  }
+
+  selectedObject.position.add(moveVector);
 }
 
 function rotateSelected(rad) {
