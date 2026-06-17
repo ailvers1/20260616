@@ -86,7 +86,7 @@ function setupThree() {
 
   renderer.xr.enabled = true;
 
-  // 일부 안드로이드/삼성 인터넷에서 local-floor 미지원 오류 방지
+  // 일부 기기에서 local-floor 미지원 오류 방지
   renderer.xr.setReferenceSpaceType("local");
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -98,8 +98,7 @@ function setupThree() {
 
   controller = renderer.xr.getController(0);
 
-  // AR 화면 터치 select 이벤트.
-  // 배치 대기 모드일 때만 제품을 놓는다.
+  // AR 화면 터치 시, 배치 대기 모드일 때만 제품 1개 배치
   controller.addEventListener("select", () => {
     if (!isPlacementMode) return;
 
@@ -169,7 +168,6 @@ function bindEvents() {
     clearAll();
   });
 
-  // 카메라 기준 방향키 이동
   safeClick("moveForward", (event) => {
     stopUIEvent(event);
     moveSelectedByCamera("forward", MOVE_STEP);
@@ -190,7 +188,6 @@ function bindEvents() {
     moveSelectedByCamera("right", MOVE_STEP);
   });
 
-  // 제자리 회전
   safeClick("rotateLeft", (event) => {
     stopUIEvent(event);
     rotateSelected(ROTATE_STEP);
@@ -201,7 +198,6 @@ function bindEvents() {
     rotateSelected(-ROTATE_STEP);
   });
 
-  // 높이 조절
   safeClick("heightUp", (event) => {
     stopUIEvent(event);
     heightSelected(HEIGHT_STEP);
@@ -252,6 +248,11 @@ function bindEvents() {
   renderer.domElement.addEventListener("pointerdown", selectByPointer);
 }
 
+/*
+  중요:
+  여기서 touchstart / pointerdown / preventDefault 쓰면
+  모바일 브라우저가 AR 시작을 “사용자 직접 클릭”으로 인정하지 않을 수 있음.
+*/
 function safeClick(id, handler) {
   const el = document.getElementById(id);
 
@@ -260,19 +261,15 @@ function safeClick(id, handler) {
     return;
   }
 
-  el.addEventListener("click", handler);
-  el.addEventListener("pointerdown", stopUIEvent);
-  el.addEventListener("touchstart", stopUIEvent, { passive: false });
+  el.addEventListener("click", (event) => {
+    event.stopPropagation();
+    handler(event);
+  });
 }
 
 function stopUIEvent(event) {
   if (!event) return;
-
   event.stopPropagation();
-
-  if (typeof event.preventDefault === "function") {
-    event.preventDefault();
-  }
 }
 
 async function loadManifest() {
