@@ -2,34 +2,22 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
-  />
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
   <title>SYSMATE AR 제품 배치</title>
-
   <link rel="stylesheet" href="css/style.css" />
 </head>
-
 <body>
   <!-- 시작 화면 -->
   <div id="startScreen">
     <div class="startLogo">📱✨</div>
-
     <h1>SYSMATE AR</h1>
+    <p>실제 제품 GLB 모델을 공간에 배치해보세요.</p>
 
-    <p>
-      실제 제품 GLB 모델을 공간에 배치해보세요.
-    </p>
-
-    <button id="startBtnBig" type="button">
-      AR 시작
-    </button>
+    <button id="startBtnBig">AR 시작</button>
 
     <div class="notice">
       Android Chrome / ARCore 지원 기기 기준입니다.<br />
-      삼성 인터넷 또는 iPhone에서는 WebXR AR 지원이 제한될 수 있습니다.
+      iPhone은 WebXR AR 지원이 제한될 수 있습니다.
     </div>
   </div>
 
@@ -37,48 +25,25 @@
   <div id="topBar">
     <div class="row">
       <label for="productSelect">제품 선택</label>
-
-      <select id="productSelect">
-        <option value="">제품 목록 불러오는 중...</option>
-      </select>
-
-      <button id="loadBtn" type="button">
-        모델 준비
-      </button>
+      <select id="productSelect"></select>
+      <button id="loadBtn">모델 준비</button>
     </div>
 
     <div class="row">
-      <label for="lockScale">
+      <label>
         <input type="checkbox" id="lockScale" checked />
         실측 고정
       </label>
 
       <span>스케일</span>
-
-      <input
-        id="scaleRange"
-        type="range"
-        min="50"
-        max="150"
-        value="100"
-        disabled
-      />
-
+      <input id="scaleRange" type="range" min="50" max="150" value="100" disabled />
       <span id="scaleValue">100%</span>
     </div>
 
     <div class="row">
-      <button id="placeBtn" type="button">
-        📍 배치
-      </button>
-
-      <button id="captureBtn" type="button">
-        📸 캡처
-      </button>
-
-      <button id="clearBtn" type="button">
-        🗑️ 전체삭제
-      </button>
+      <button id="placeBtn">📍 배치</button>
+      <button id="captureBtn">📸 캡처</button>
+      <button id="clearBtn">🗑️ 전체삭제</button>
     </div>
   </div>
 
@@ -87,48 +52,28 @@
     <div id="editTitle">선택된 제품 없음</div>
 
     <div class="pad">
-      <button id="moveForward" type="button">▲</button>
-      <button id="moveLeft" type="button">◀</button>
-      <button id="moveRight" type="button">▶</button>
-      <button id="moveBack" type="button">▼</button>
+      <button id="moveForward">▲</button>
+      <button id="moveLeft">◀</button>
+      <button id="moveRight">▶</button>
+      <button id="moveBack">▼</button>
     </div>
 
     <div class="row small">
-      <button id="rotateLeft" type="button">
-        ⟲ 회전
-      </button>
-
-      <button id="rotateRight" type="button">
-        회전 ⟳
-      </button>
+      <button id="rotateLeft">⟲ 회전</button>
+      <button id="rotateRight">회전 ⟳</button>
     </div>
 
     <div class="row small">
-      <button id="heightDown" type="button">
-        높이 -
-      </button>
-
-      <button id="heightUp" type="button">
-        높이 +
-      </button>
+      <button id="heightDown">높이 -</button>
+      <button id="heightUp">높이 +</button>
     </div>
   </div>
 
-  <!-- AR 배치 가이드 -->
   <div id="reticle"></div>
-
-  <!-- 메시지 -->
   <div id="toast"></div>
-
-  <!-- 캡처 이미지 -->
   <div id="captureStrip"></div>
 
-  <!--
-    중요:
-    app.js에서 import * as THREE from "three";
-    이렇게 쓰기 때문에 importmap이 반드시 필요함.
-    그리고 importmap은 app.js보다 위에 있어야 함.
-  -->
+  <!-- 중요: importmap은 app.js보다 위에 있어야 함 -->
   <script type="importmap">
   {
     "imports": {
