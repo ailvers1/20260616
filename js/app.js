@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { ARButton } from "three/addons/webxr/ARButton.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const $ = (id) => document.getElementById(id);
@@ -111,52 +110,69 @@ function setupReticle() {
 }
 
 function bindEvents() {
-  dom.startBtnBig.addEventListener("click", startAR);
+  safeClick("startBtnBig", startAR);
 
-  dom.loadBtn.addEventListener("click", async () => {
+  safeClick("loadBtn", async () => {
     await preloadCurrentProduct();
   });
 
-  dom.placeBtn.addEventListener("click", () => {
+  safeClick("placeBtn", () => {
     placeCurrentProduct();
   });
 
-  dom.captureBtn.addEventListener("click", captureScreen);
+  safeClick("captureBtn", captureScreen);
 
-  dom.clearBtn.addEventListener("click", clearAll);
+  safeClick("clearBtn", clearAll);
 
-  dom.productSelect.addEventListener("change", () => {
-    const id = dom.productSelect.value;
-    currentProduct = products.find((p) => p.id === id) || null;
-    showToast(`${currentProduct?.name || "제품"} 선택됨`);
-  });
+  safeClick("moveForward", () => moveSelected(0, -0.05));
+  safeClick("moveBack", () => moveSelected(0, 0.05));
+  safeClick("moveLeft", () => moveSelected(-0.05, 0));
+  safeClick("moveRight", () => moveSelected(0.05, 0));
 
-  dom.lockScale.addEventListener("change", () => {
-    dom.scaleRange.disabled = dom.lockScale.checked;
-  });
+  safeClick("rotateLeft", () => rotateSelected(THREE.MathUtils.degToRad(15)));
+  safeClick("rotateRight", () => rotateSelected(THREE.MathUtils.degToRad(-15)));
 
-  dom.scaleRange.addEventListener("input", () => {
-    const pct = Number(dom.scaleRange.value);
-    dom.scaleValue.textContent = `${pct}%`;
+  safeClick("heightUp", () => heightSelected(0.05));
+  safeClick("heightDown", () => heightSelected(-0.05));
 
-    if (selectedObject && !dom.lockScale.checked) {
-      const s = pct / 100;
-      selectedObject.scale.setScalar(s);
-    }
-  });
+  if (dom.productSelect) {
+    dom.productSelect.addEventListener("change", () => {
+      const id = dom.productSelect.value;
+      currentProduct = products.find((p) => p.id === id) || null;
+      showToast(`${currentProduct?.name || "제품"} 선택됨`);
+    });
+  }
 
-  dom.moveForward.addEventListener("click", () => moveSelected(0, -0.05));
-  dom.moveBack.addEventListener("click", () => moveSelected(0, 0.05));
-  dom.moveLeft.addEventListener("click", () => moveSelected(-0.05, 0));
-  dom.moveRight.addEventListener("click", () => moveSelected(0.05, 0));
+  if (dom.lockScale && dom.scaleRange) {
+    dom.lockScale.addEventListener("change", () => {
+      dom.scaleRange.disabled = dom.lockScale.checked;
+    });
+  }
 
-  dom.rotateLeft.addEventListener("click", () => rotateSelected(THREE.MathUtils.degToRad(15)));
-  dom.rotateRight.addEventListener("click", () => rotateSelected(THREE.MathUtils.degToRad(-15)));
+  if (dom.scaleRange) {
+    dom.scaleRange.addEventListener("input", () => {
+      const pct = Number(dom.scaleRange.value);
+      dom.scaleValue.textContent = `${pct}%`;
 
-  dom.heightUp.addEventListener("click", () => heightSelected(0.05));
-  dom.heightDown.addEventListener("click", () => heightSelected(-0.05));
+      if (selectedObject && !dom.lockScale.checked) {
+        const s = pct / 100;
+        selectedObject.scale.setScalar(s);
+      }
+    });
+  }
 
   renderer.domElement.addEventListener("pointerdown", selectByPointer);
+}
+
+function safeClick(id, handler) {
+  const el = document.getElementById(id);
+
+  if (!el) {
+    console.warn(`[버튼 없음] #${id}`);
+    return;
+  }
+
+  el.addEventListener("click", handler);
 }
 
 async function loadManifest() {
@@ -193,44 +209,51 @@ async function loadManifest() {
 }
 
 async function startAR() {
+  console.log("AR 시작 버튼 클릭됨");
+
   if (!navigator.xr) {
-    showToast("이 브라우저는 WebXR AR을 지원하지 않습니다.");
+    alert("이 브라우저는 WebXR AR을 지원하지 않습니다. Android Chrome에서 테스트해주세요.");
+    showToast("WebXR AR 미지원 브라우저입니다.");
     return;
   }
 
-  const supported = await navigator.xr.isSessionSupported("immersive-ar");
+  try {
+    const supported = await navigator.xr.isSessionSupported("immersive-ar");
 
-  if (!supported) {
-    showToast("현재 기기/브라우저에서 AR이 지원되지 않습니다.");
-    return;
-  }
+    if (!supported) {
+      alert("현재 기기/브라우저에서 AR이 지원되지 않습니다. Android Chrome + ARCore 지원 기기에서 테스트해주세요.");
+      showToast("현재 기기에서 AR이 지원되지 않습니다.");
+      return;
+    }
 
-  const arButton = ARButton.createButton(renderer, {
-    requiredFeatures: ["hit-test"],
-    optionalFeatures: ["dom-overlay"],
-    domOverlay: { root: document.body }
-  });
+    const session = await navigator.xr.requestSession("immersive-ar", {
+      requiredFeatures: ["hit-test"],
+      optionalFeatures: ["dom-overlay"],
+      domOverlay: { root: document.body }
+    });
 
-  arButton.style.display = "none";
-  document.body.appendChild(arButton);
+    await renderer.xr.setSession(session);
 
-  renderer.xr.addEventListener("sessionstart", () => {
     dom.startScreen.classList.add("hidden");
     dom.topBar.classList.add("show");
     dom.reticle.style.display = "block";
-    showToast("바닥을 비추면 배치 위치가 표시됩니다.");
-  });
 
-  renderer.xr.addEventListener("sessionend", () => {
-    hitTestSourceRequested = false;
-    hitTestSource = null;
-    reticleObject.visible = false;
-    dom.reticle.style.display = "none";
-    dom.topBar.classList.remove("show");
-    dom.startScreen.classList.remove("hidden");
-  });
+    showToast("AR 시작됨. 바닥을 비춰주세요.");
 
-  arButton.click();
+    session.addEventListener("end", () => {
+      hitTestSourceRequested = false;
+      hitTestSource = null;
+      reticleObject.visible = false;
+      dom.reticle.style.display = "none";
+      dom.topBar.classList.remove("show");
+      dom.startScreen.classList.remove("hidden");
+    });
+
+  } catch (err) {
+    console.error("AR 시작 실패:", err);
+    alert("AR 시작 실패: " + err.message);
+    showToast("AR 시작 실패");
+  }
 }
 
 async function preloadCurrentProduct() {
@@ -267,8 +290,6 @@ async function placeCurrentProduct() {
     model.position.setFromMatrixPosition(reticleObject.matrix);
     model.quaternion.setFromRotationMatrix(reticleObject.matrix);
 
-    // 제품은 이미 bottom-center 기준으로 정리되어 있다는 전제.
-    // 바닥에 눕는 경우만 여기에서 회전값 조정.
     if (currentProduct.rotationYDeg) {
       model.rotation.y += THREE.MathUtils.degToRad(currentProduct.rotationYDeg);
     }
@@ -309,9 +330,6 @@ function loadModel(product) {
           child.castShadow = true;
           child.receiveShadow = true;
 
-          // 중요:
-          // 여기서 material을 새로 만들면 기존 GLB 색상/텍스처가 날아감.
-          // 그래서 원래 재질을 그대로 유지한다.
           if (child.material) {
             if (Array.isArray(child.material)) {
               child.material.forEach(prepareMaterial);
