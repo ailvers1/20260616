@@ -6,18 +6,15 @@ const $ = (id) => document.getElementById(id);
 const dom = {
   startScreen: $("startScreen"),
   startBtnBig: $("startBtnBig"),
-
   topBar: $("topBar"),
   productSelect: $("productSelect"),
   loadBtn: $("loadBtn"),
   placeBtn: $("placeBtn"),
   captureBtn: $("captureBtn"),
   clearBtn: $("clearBtn"),
-
   lockScale: $("lockScale"),
   scaleRange: $("scaleRange"),
   scaleValue: $("scaleValue"),
-
   reticle: $("reticle"),
   editPanel: $("editPanel"),
   editTitle: $("editTitle"),
@@ -42,18 +39,11 @@ let reticleObject;
 
 let hitTestSource = null;
 let hitTestSourceRequested = false;
-let viewerSpace = null;
 
 let products = [];
 let currentProduct = null;
 let selectedObject = null;
 let placedObjects = [];
-
-let isPlacementMode = false;
-
-const MOVE_STEP = 0.05;
-const HEIGHT_STEP = 0.05;
-const ROTATE_STEP = THREE.MathUtils.degToRad(15);
 
 const gltfLoader = new GLTFLoader();
 const modelCache = new Map();
@@ -61,17 +51,12 @@ const modelCache = new Map();
 init();
 
 async function init() {
-  try {
-    setupThree();
-    setupLights();
-    setupReticle();
-    bindEvents();
-    await loadManifest();
-    animate();
-  } catch (err) {
-    console.error("초기화 실패:", err);
-    alert("초기화 실패: " + err.message);
-  }
+  setupThree();
+  setupLights();
+  setupReticle();
+  bindEvents();
+  await loadManifest();
+  animate();
 }
 
 function setupThree() {
@@ -83,12 +68,7 @@ function setupThree() {
 
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-
   renderer.xr.enabled = true;
-
-  // 일부 기기에서 local-floor 미지원 오류 방지
-  renderer.xr.setReferenceSpaceType("local");
-
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   document.body.appendChild(renderer.domElement);
@@ -97,16 +77,9 @@ function setupThree() {
   camera = new THREE.PerspectiveCamera();
 
   controller = renderer.xr.getController(0);
-
-  // AR 화면 터치 시, 배치 대기 모드일 때만 제품 1개 배치
   controller.addEventListener("select", () => {
-    if (!isPlacementMode) return;
-
     placeCurrentProduct();
-    isPlacementMode = false;
-    updatePlaceButtonState();
   });
-
   scene.add(controller);
 
   window.addEventListener("resize", onResize);
@@ -133,112 +106,55 @@ function setupReticle() {
 
   reticleObject.matrixAutoUpdate = false;
   reticleObject.visible = false;
-
   scene.add(reticleObject);
 }
 
 function bindEvents() {
   safeClick("startBtnBig", startAR);
 
-  safeClick("loadBtn", async (event) => {
-    stopUIEvent(event);
+  safeClick("loadBtn", async () => {
     await preloadCurrentProduct();
   });
 
-  safeClick("placeBtn", (event) => {
-    stopUIEvent(event);
-
-    if (!currentProduct) {
-      showToast("제품을 먼저 선택하세요.");
-      return;
-    }
-
-    isPlacementMode = true;
-    updatePlaceButtonState();
-    showToast("배치할 위치를 화면에서 한 번 터치하세요.");
+  safeClick("placeBtn", () => {
+    placeCurrentProduct();
   });
 
-  safeClick("captureBtn", (event) => {
-    stopUIEvent(event);
-    captureScreen();
-  });
+  safeClick("captureBtn", captureScreen);
 
-  safeClick("clearBtn", (event) => {
-    stopUIEvent(event);
-    clearAll();
-  });
+  safeClick("clearBtn", clearAll);
 
-  safeClick("moveForward", (event) => {
-    stopUIEvent(event);
-    moveSelectedByCamera("forward", MOVE_STEP);
-  });
+  safeClick("moveForward", () => moveSelected(0, -0.05));
+  safeClick("moveBack", () => moveSelected(0, 0.05));
+  safeClick("moveLeft", () => moveSelected(-0.05, 0));
+  safeClick("moveRight", () => moveSelected(0.05, 0));
 
-  safeClick("moveBack", (event) => {
-    stopUIEvent(event);
-    moveSelectedByCamera("back", MOVE_STEP);
-  });
+  safeClick("rotateLeft", () => rotateSelected(THREE.MathUtils.degToRad(15)));
+  safeClick("rotateRight", () => rotateSelected(THREE.MathUtils.degToRad(-15)));
 
-  safeClick("moveLeft", (event) => {
-    stopUIEvent(event);
-    moveSelectedByCamera("left", MOVE_STEP);
-  });
-
-  safeClick("moveRight", (event) => {
-    stopUIEvent(event);
-    moveSelectedByCamera("right", MOVE_STEP);
-  });
-
-  safeClick("rotateLeft", (event) => {
-    stopUIEvent(event);
-    rotateSelected(ROTATE_STEP);
-  });
-
-  safeClick("rotateRight", (event) => {
-    stopUIEvent(event);
-    rotateSelected(-ROTATE_STEP);
-  });
-
-  safeClick("heightUp", (event) => {
-    stopUIEvent(event);
-    heightSelected(HEIGHT_STEP);
-  });
-
-  safeClick("heightDown", (event) => {
-    stopUIEvent(event);
-    heightSelected(-HEIGHT_STEP);
-  });
+  safeClick("heightUp", () => heightSelected(0.05));
+  safeClick("heightDown", () => heightSelected(-0.05));
 
   if (dom.productSelect) {
-    dom.productSelect.addEventListener("change", (event) => {
-      stopUIEvent(event);
-
+    dom.productSelect.addEventListener("change", () => {
       const id = dom.productSelect.value;
       currentProduct = products.find((p) => p.id === id) || null;
-
-      if (currentProduct) {
-        showToast(`${currentProduct.name} 선택됨`);
-      }
+      showToast(`${currentProduct?.name || "제품"} 선택됨`);
     });
   }
 
   if (dom.lockScale && dom.scaleRange) {
-    dom.lockScale.addEventListener("change", (event) => {
-      stopUIEvent(event);
+    dom.lockScale.addEventListener("change", () => {
       dom.scaleRange.disabled = dom.lockScale.checked;
     });
   }
 
   if (dom.scaleRange) {
-    dom.scaleRange.addEventListener("input", (event) => {
-      stopUIEvent(event);
-
+    dom.scaleRange.addEventListener("input", () => {
       const pct = Number(dom.scaleRange.value);
+      dom.scaleValue.textContent = `${pct}%`;
 
-      if (dom.scaleValue) {
-        dom.scaleValue.textContent = `${pct}%`;
-      }
-
-      if (selectedObject && dom.lockScale && !dom.lockScale.checked) {
+      if (selectedObject && !dom.lockScale.checked) {
         const s = pct / 100;
         selectedObject.scale.setScalar(s);
       }
@@ -248,11 +164,6 @@ function bindEvents() {
   renderer.domElement.addEventListener("pointerdown", selectByPointer);
 }
 
-/*
-  중요:
-  여기서 touchstart / pointerdown / preventDefault 쓰면
-  모바일 브라우저가 AR 시작을 “사용자 직접 클릭”으로 인정하지 않을 수 있음.
-*/
 function safeClick(id, handler) {
   const el = document.getElementById(id);
 
@@ -261,15 +172,7 @@ function safeClick(id, handler) {
     return;
   }
 
-  el.addEventListener("click", (event) => {
-    event.stopPropagation();
-    handler(event);
-  });
-}
-
-function stopUIEvent(event) {
-  if (!event) return;
-  event.stopPropagation();
+  el.addEventListener("click", handler);
 }
 
 async function loadManifest() {
@@ -277,20 +180,11 @@ async function loadManifest() {
     const res = await fetch("manifest.json", { cache: "no-store" });
 
     if (!res.ok) {
-      throw new Error(`manifest.json 로드 실패: HTTP ${res.status}`);
+      throw new Error(`manifest.json 로드 실패: ${res.status}`);
     }
 
     const data = await res.json();
-
-    if (!Array.isArray(data.products)) {
-      throw new Error("manifest.json 안에 products 배열이 없습니다.");
-    }
-
-    products = data.products;
-
-    if (!dom.productSelect) {
-      throw new Error("#productSelect 요소가 없습니다.");
-    }
+    products = data.products || [];
 
     dom.productSelect.innerHTML = "";
 
@@ -305,14 +199,12 @@ async function loadManifest() {
 
     if (currentProduct) {
       dom.productSelect.value = currentProduct.id;
-      showToast("제품 목록 로드 완료");
-    } else {
-      showToast("등록된 제품이 없습니다.");
     }
+
+    showToast("제품 목록 로드 완료");
   } catch (err) {
-    console.error("manifest 로드 오류:", err);
-    alert("manifest.json 로드 오류: " + err.message);
-    showToast("manifest.json 로드 실패");
+    console.error(err);
+    showToast("manifest.json을 불러오지 못했습니다.");
   }
 }
 
@@ -342,31 +234,21 @@ async function startAR() {
 
     await renderer.xr.setSession(session);
 
-    dom.startScreen?.classList.add("hidden");
-    dom.topBar?.classList.add("show");
-
-    if (dom.reticle) {
-      dom.reticle.style.display = "block";
-    }
+    dom.startScreen.classList.add("hidden");
+    dom.topBar.classList.add("show");
+    dom.reticle.style.display = "block";
 
     showToast("AR 시작됨. 바닥을 비춰주세요.");
 
     session.addEventListener("end", () => {
       hitTestSourceRequested = false;
       hitTestSource = null;
-      viewerSpace = null;
-      isPlacementMode = false;
-
       reticleObject.visible = false;
-
-      if (dom.reticle) {
-        dom.reticle.style.display = "none";
-      }
-
-      dom.topBar?.classList.remove("show");
-      dom.startScreen?.classList.remove("hidden");
-      updatePlaceButtonState();
+      dom.reticle.style.display = "none";
+      dom.topBar.classList.remove("show");
+      dom.startScreen.classList.remove("hidden");
     });
+
   } catch (err) {
     console.error("AR 시작 실패:", err);
     alert("AR 시작 실패: " + err.message);
@@ -385,14 +267,8 @@ async function preloadCurrentProduct() {
     await loadModel(currentProduct);
     showToast("모델 준비 완료");
   } catch (err) {
-    console.error("모델 로드 실패:", err);
-    alert(
-      "모델 로드 실패:\n" +
-      currentProduct.file +
-      "\n\n파일명과 manifest.json 경로를 확인하세요.\n\n" +
-      err.message
-    );
-    showToast("모델 로드 실패");
+    console.error(err);
+    showToast("모델 로드 실패. 경로와 파일명을 확인하세요.");
   }
 }
 
@@ -411,23 +287,14 @@ async function placeCurrentProduct() {
     const model = await loadModel(currentProduct);
 
     model.matrixAutoUpdate = true;
-
     model.position.setFromMatrixPosition(reticleObject.matrix);
     model.quaternion.setFromRotationMatrix(reticleObject.matrix);
-
-    if (currentProduct.rotationXDeg) {
-      model.rotation.x += THREE.MathUtils.degToRad(currentProduct.rotationXDeg);
-    }
 
     if (currentProduct.rotationYDeg) {
       model.rotation.y += THREE.MathUtils.degToRad(currentProduct.rotationYDeg);
     }
 
-    if (currentProduct.rotationZDeg) {
-      model.rotation.z += THREE.MathUtils.degToRad(currentProduct.rotationZDeg);
-    }
-
-    if (dom.lockScale && !dom.lockScale.checked && dom.scaleRange) {
+    if (!dom.lockScale.checked) {
       const s = Number(dom.scaleRange.value) / 100;
       model.scale.setScalar(s);
     }
@@ -437,13 +304,11 @@ async function placeCurrentProduct() {
 
     scene.add(model);
     placedObjects.push(model);
-
     selectObject(model);
 
     showToast(`${currentProduct.name} 배치 완료`);
   } catch (err) {
-    console.error("모델 배치 실패:", err);
-    alert("모델 배치 실패: " + err.message);
+    console.error(err);
     showToast("모델 배치 실패");
   }
 }
@@ -478,10 +343,7 @@ function loadModel(product) {
         resolve(cloneModel(root));
       },
       undefined,
-      (err) => {
-        console.error(`GLB 로드 실패: ${product.file}`, err);
-        reject(err);
-      }
+      reject
     );
   });
 }
@@ -490,11 +352,6 @@ function prepareMaterial(material) {
   if (material.map) {
     material.map.colorSpace = THREE.SRGBColorSpace;
     material.map.needsUpdate = true;
-  }
-
-  if (material.emissiveMap) {
-    material.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-    material.emissiveMap.needsUpdate = true;
   }
 
   material.needsUpdate = true;
@@ -520,43 +377,20 @@ function selectObject(obj) {
   selectedObject = obj;
 
   if (!obj) {
-    dom.editPanel?.classList.remove("show");
-
-    if (dom.editTitle) {
-      dom.editTitle.textContent = "선택된 제품 없음";
-    }
-
+    dom.editPanel.classList.remove("show");
+    dom.editTitle.textContent = "선택된 제품 없음";
     return;
   }
 
-  dom.editPanel?.classList.add("show");
-
-  if (dom.editTitle) {
-    dom.editTitle.textContent = obj.userData.productName || "선택된 제품";
-  }
+  dom.editPanel.classList.add("show");
+  dom.editTitle.textContent = obj.userData.productName || "선택된 제품";
 
   const scalePct = Math.round(obj.scale.x * 100);
-
-  if (dom.scaleRange) {
-    dom.scaleRange.value = scalePct;
-  }
-
-  if (dom.scaleValue) {
-    dom.scaleValue.textContent = `${scalePct}%`;
-  }
+  dom.scaleRange.value = scalePct;
+  dom.scaleValue.textContent = `${scalePct}%`;
 }
 
 function selectByPointer(event) {
-  if (
-    event.target.closest("#topBar") ||
-    event.target.closest("#editPanel") ||
-    event.target.closest("#startScreen") ||
-    event.target.closest("#toast") ||
-    event.target.closest("#captureStrip")
-  ) {
-    return;
-  }
-
   if (!placedObjects.length) return;
 
   const rect = renderer.domElement.getBoundingClientRect();
@@ -585,41 +419,14 @@ function selectByPointer(event) {
   selectObject(target);
 }
 
-function moveSelectedByCamera(direction, distance) {
+function moveSelected(dx, dz) {
   if (!selectedObject) {
     showToast("이동할 제품을 선택하세요.");
     return;
   }
 
-  const cameraDirection = new THREE.Vector3();
-  camera.getWorldDirection(cameraDirection);
-
-  cameraDirection.y = 0;
-
-  if (cameraDirection.lengthSq() === 0) {
-    showToast("카메라 방향을 읽지 못했습니다.");
-    return;
-  }
-
-  cameraDirection.normalize();
-
-  const rightDirection = new THREE.Vector3();
-  rightDirection.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0));
-  rightDirection.normalize();
-
-  const moveVector = new THREE.Vector3();
-
-  if (direction === "forward") {
-    moveVector.copy(cameraDirection).multiplyScalar(distance);
-  } else if (direction === "back") {
-    moveVector.copy(cameraDirection).multiplyScalar(-distance);
-  } else if (direction === "left") {
-    moveVector.copy(rightDirection).multiplyScalar(-distance);
-  } else if (direction === "right") {
-    moveVector.copy(rightDirection).multiplyScalar(distance);
-  }
-
-  selectedObject.position.add(moveVector);
+  selectedObject.position.x += dx;
+  selectedObject.position.z += dz;
 }
 
 function rotateSelected(rad) {
@@ -646,12 +453,7 @@ function clearAll() {
   }
 
   placedObjects = [];
-  selectedObject = null;
-  isPlacementMode = false;
-
   selectObject(null);
-  updatePlaceButtonState();
-
   showToast("전체 삭제 완료");
 }
 
@@ -661,32 +463,16 @@ function captureScreen() {
 
     const img = document.createElement("img");
     img.src = url;
-
     img.addEventListener("click", () => {
       const win = window.open();
-
-      if (win) {
-        win.document.write(`<img src="${url}" style="max-width:100%">`);
-      }
+      win.document.write(`<img src="${url}" style="max-width:100%">`);
     });
 
-    dom.captureStrip?.prepend(img);
+    dom.captureStrip.prepend(img);
     showToast("캡처 완료");
   } catch (err) {
-    console.error("캡처 실패:", err);
+    console.error(err);
     showToast("캡처 실패");
-  }
-}
-
-function updatePlaceButtonState() {
-  if (!dom.placeBtn) return;
-
-  if (isPlacementMode) {
-    dom.placeBtn.textContent = "📍 배치 대기중";
-    dom.placeBtn.style.background = "rgba(34,197,94,.85)";
-  } else {
-    dom.placeBtn.textContent = "📍 배치";
-    dom.placeBtn.style.background = "rgba(14,165,233,.75)";
   }
 }
 
@@ -696,89 +482,55 @@ function animate() {
 
 function render(timestamp, frame) {
   if (frame) {
-    handleHitTest(frame);
+    const session = renderer.xr.getSession();
+
+    if (!hitTestSourceRequested) {
+      session.requestReferenceSpace("viewer").then((referenceSpace) => {
+        session.requestHitTestSource({ space: referenceSpace }).then((source) => {
+          hitTestSource = source;
+        });
+      });
+
+      session.addEventListener("end", () => {
+        hitTestSourceRequested = false;
+        hitTestSource = null;
+      });
+
+      hitTestSourceRequested = true;
+    }
+
+    if (hitTestSource) {
+      const referenceSpace = renderer.xr.getReferenceSpace();
+      const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+      if (hitTestResults.length) {
+        const hit = hitTestResults[0];
+        const pose = hit.getPose(referenceSpace);
+
+        reticleObject.visible = true;
+        reticleObject.matrix.fromArray(pose.transform.matrix);
+        dom.reticle.style.display = "block";
+      } else {
+        reticleObject.visible = false;
+        dom.reticle.style.display = "none";
+      }
+    }
   }
 
   renderer.render(scene, camera);
 }
 
-function handleHitTest(frame) {
-  const session = renderer.xr.getSession();
-
-  if (!session) return;
-
-  if (!hitTestSourceRequested) {
-    hitTestSourceRequested = true;
-
-    session.requestReferenceSpace("viewer")
-      .then((space) => {
-        viewerSpace = space;
-        return session.requestHitTestSource({ space: viewerSpace });
-      })
-      .then((source) => {
-        hitTestSource = source;
-      })
-      .catch((err) => {
-        console.error("hit-test source 생성 실패:", err);
-        showToast("바닥 인식 준비 실패: " + err.message);
-      });
-
-    session.addEventListener("end", () => {
-      hitTestSourceRequested = false;
-      hitTestSource = null;
-      viewerSpace = null;
-    });
-  }
-
-  if (!hitTestSource) return;
-
-  const referenceSpace = renderer.xr.getReferenceSpace();
-
-  if (!referenceSpace) return;
-
-  const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-  if (hitTestResults.length) {
-    const hit = hitTestResults[0];
-    const pose = hit.getPose(referenceSpace);
-
-    if (pose) {
-      reticleObject.visible = true;
-      reticleObject.matrix.fromArray(pose.transform.matrix);
-
-      if (dom.reticle) {
-        dom.reticle.style.display = "block";
-      }
-    }
-  } else {
-    reticleObject.visible = false;
-
-    if (dom.reticle) {
-      dom.reticle.style.display = "none";
-    }
-  }
-}
-
 function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
-
-  if (camera) {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-  }
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
 }
 
 function showToast(message) {
-  if (!dom.toast) {
-    console.log("[toast]", message);
-    return;
-  }
-
   dom.toast.textContent = message;
   dom.toast.style.display = "block";
 
   clearTimeout(showToast.timer);
-
   showToast.timer = setTimeout(() => {
     dom.toast.style.display = "none";
   }, 1800);
