@@ -43,12 +43,19 @@ let reticleObject;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
 let viewerSpace = null;
-let localSpace = null;
 
 let products = [];
 let currentProduct = null;
 let selectedObject = null;
 let placedObjects = [];
+
+/*
+  중요:
+  배치 버튼을 눌렀을 때만 true.
+  화면 터치 1회로 배치 후 false로 바꿔서
+  이동/회전 버튼 클릭 시 새 모델이 복사 생성되는 문제를 막음.
+*/
+let isPlacementMode = false;
 
 const gltfLoader = new GLTFLoader();
 const modelCache = new Map();
@@ -82,10 +89,8 @@ function setupThree() {
   renderer.xr.enabled = true;
 
   /*
-    중요:
-    일부 브라우저/기기에서 기본 reference space인 local-floor를 지원하지 않아
-    "This device does not support the requested reference space type" 오류가 날 수 있음.
-    그래서 local 기준으로 고정.
+    일부 기기/브라우저에서 local-floor 미지원 오류 방지.
+    삼성 인터넷/일부 안드로이드 브라우저에서 특히 필요.
   */
   renderer.xr.setReferenceSpaceType("local");
 
@@ -97,9 +102,19 @@ function setupThree() {
   camera = new THREE.PerspectiveCamera();
 
   controller = renderer.xr.getController(0);
+
+  /*
+    AR 화면 터치 select 이벤트.
+    배치 대기 모드일 때만 제품을 놓는다.
+  */
   controller.addEventListener("select", () => {
+    if (!isPlacementMode) return;
+
     placeCurrentProduct();
+    isPlacementMode = false;
+    updatePlaceButtonState();
   });
+
   scene.add(controller);
 
   window.addEventListener("resize", onResize);
@@ -133,31 +148,83 @@ function setupReticle() {
 function bindEvents() {
   safeClick("startBtnBig", startAR);
 
-  safeClick("loadBtn", async () => {
+  safeClick("loadBtn", async (event) => {
+    stopUIEvent(event);
     await preloadCurrentProduct();
   });
 
-  safeClick("placeBtn", () => {
-    placeCurrentProduct();
+  /*
+    배치 버튼은 바로 배치하지 않고,
+    배치 대기 모드만 켠다.
+    실제 배치는 AR 화면 터치 select 이벤트에서 1회 실행.
+  */
+  safeClick("placeBtn", (event) => {
+    stopUIEvent(event);
+
+    if (!currentProduct) {
+      showToast("제품을 먼저 선택하세요.");
+      return;
+    }
+
+    isPlacementMode = true;
+    updatePlaceButtonState();
+    showToast("배치할 위치를 화면에서 한 번 터치하세요.");
   });
 
-  safeClick("captureBtn", captureScreen);
+  safeClick("captureBtn", (event) => {
+    stopUIEvent(event);
+    captureScreen();
+  });
 
-  safeClick("clearBtn", clearAll);
+  safeClick("clearBtn", (event) => {
+    stopUIEvent(event);
+    clearAll();
+  });
 
-  safeClick("moveForward", () => moveSelected(0, -0.05));
-  safeClick("moveBack", () => moveSelected(0, 0.05));
-  safeClick("moveLeft", () => moveSelected(-0.05, 0));
-  safeClick("moveRight", () => moveSelected(0.05, 0));
+  safeClick("moveForward", (event) => {
+    stopUIEvent(event);
+    moveSelected(0, -0.05);
+  });
 
-  safeClick("rotateLeft", () => rotateSelected(THREE.MathUtils.degToRad(15)));
-  safeClick("rotateRight", () => rotateSelected(THREE.MathUtils.degToRad(-15)));
+  safeClick("moveBack", (event) => {
+    stopUIEvent(event);
+    moveSelected(0, 0.05);
+  });
 
-  safeClick("heightUp", () => heightSelected(0.05));
-  safeClick("heightDown", () => heightSelected(-0.05));
+  safeClick("moveLeft", (event) => {
+    stopUIEvent(event);
+    moveSelected(-0.05, 0);
+  });
+
+  safeClick("moveRight", (event) => {
+    stopUIEvent(event);
+    moveSelected(0.05, 0);
+  });
+
+  safeClick("rotateLeft", (event) => {
+    stopUIEvent(event);
+    rotateSelected(THREE.MathUtils.degToRad(15));
+  });
+
+  safeClick("rotateRight", (event) => {
+    stopUIEvent(event);
+    rotateSelected(THREE.MathUtils.degToRad(-15));
+  });
+
+  safeClick("heightUp", (event) => {
+    stopUIEvent(event);
+    heightSelected(0.05);
+  });
+
+  safeClick("heightDown", (event) => {
+    stopUIEvent(event);
+    heightSelected(-0.05);
+  });
 
   if (dom.productSelect) {
-    dom.productSelect.addEventListener("change", () => {
+    dom.productSelect.addEventListener("change", (event) => {
+      stopUIEvent(event);
+
       const id = dom.productSelect.value;
       currentProduct = products.find((p) => p.id === id) || null;
 
@@ -168,13 +235,16 @@ function bindEvents() {
   }
 
   if (dom.lockScale && dom.scaleRange) {
-    dom.lockScale.addEventListener("change", () => {
+    dom.lockScale.addEventListener("change", (event) => {
+      stopUIEvent(event);
       dom.scaleRange.disabled = dom.lockScale.checked;
     });
   }
 
   if (dom.scaleRange) {
-    dom.scaleRange.addEventListener("input", () => {
+    dom.scaleRange.addEventListener("input", (event) => {
+      stopUIEvent(event);
+
       const pct = Number(dom.scaleRange.value);
 
       if (dom.scaleValue) {
@@ -188,6 +258,10 @@ function bindEvents() {
     });
   }
 
+  /*
+    UI가 아닌 캔버스 영역 터치 시, 기존 배치된 제품 선택용.
+    UI 버튼 터치는 무시한다.
+  */
   renderer.domElement.addEventListener("pointerdown", selectByPointer);
 }
 
@@ -200,6 +274,18 @@ function safeClick(id, handler) {
   }
 
   el.addEventListener("click", handler);
+  el.addEventListener("pointerdown", stopUIEvent);
+  el.addEventListener("touchstart", stopUIEvent, { passive: false });
+}
+
+function stopUIEvent(event) {
+  if (!event) return;
+
+  event.stopPropagation();
+
+  if (typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
 }
 
 async function loadManifest() {
@@ -285,7 +371,7 @@ async function startAR() {
       hitTestSourceRequested = false;
       hitTestSource = null;
       viewerSpace = null;
-      localSpace = null;
+      isPlacementMode = false;
 
       reticleObject.visible = false;
 
@@ -295,6 +381,7 @@ async function startAR() {
 
       dom.topBar?.classList.remove("show");
       dom.startScreen?.classList.remove("hidden");
+      updatePlaceButtonState();
     });
   } catch (err) {
     console.error("AR 시작 실패:", err);
@@ -345,8 +432,8 @@ async function placeCurrentProduct() {
     model.quaternion.setFromRotationMatrix(reticleObject.matrix);
 
     /*
-      제품 GLB는 이미 bottom-center / upright 기준으로 정리되어 있다는 전제.
-      만약 누워서 나오면 manifest에 rotationXDeg / rotationYDeg / rotationZDeg 값을 추가해서 보정 가능.
+      제품 GLB는 bottom-center / upright 기준으로 정리되어 있다는 전제.
+      누워서 나오면 manifest.json에 rotationXDeg/YDeg/ZDeg 넣어서 보정 가능.
     */
     if (currentProduct.rotationXDeg) {
       model.rotation.x += THREE.MathUtils.degToRad(currentProduct.rotationXDeg);
@@ -400,8 +487,8 @@ function loadModel(product) {
 
           /*
             중요:
-            여기서 material을 새로 만들면 GLB 원래 색상/텍스처가 날아감.
-            그래서 기존 재질을 그대로 유지한다.
+            material을 새로 만들면 GLB 원래 색상/텍스처가 날아감.
+            기존 재질 그대로 유지.
           */
           if (child.material) {
             if (Array.isArray(child.material)) {
@@ -485,6 +572,19 @@ function selectObject(obj) {
 }
 
 function selectByPointer(event) {
+  /*
+    UI 버튼 터치는 3D 선택/배치로 넘기지 않는다.
+  */
+  if (
+    event.target.closest("#topBar") ||
+    event.target.closest("#editPanel") ||
+    event.target.closest("#startScreen") ||
+    event.target.closest("#toast") ||
+    event.target.closest("#captureStrip")
+  ) {
+    return;
+  }
+
   if (!placedObjects.length) return;
 
   const rect = renderer.domElement.getBoundingClientRect();
@@ -547,7 +647,11 @@ function clearAll() {
   }
 
   placedObjects = [];
+  selectedObject = null;
+  isPlacementMode = false;
+
   selectObject(null);
+  updatePlaceButtonState();
 
   showToast("전체 삭제 완료");
 }
@@ -575,6 +679,18 @@ function captureScreen() {
   }
 }
 
+function updatePlaceButtonState() {
+  if (!dom.placeBtn) return;
+
+  if (isPlacementMode) {
+    dom.placeBtn.textContent = "📍 배치 대기중";
+    dom.placeBtn.style.background = "rgba(34,197,94,.85)";
+  } else {
+    dom.placeBtn.textContent = "📍 배치";
+    dom.placeBtn.style.background = "rgba(14,165,233,.75)";
+  }
+}
+
 function animate() {
   renderer.setAnimationLoop(render);
 }
@@ -595,10 +711,6 @@ function handleHitTest(frame) {
   if (!hitTestSourceRequested) {
     hitTestSourceRequested = true;
 
-    /*
-      hit-test source는 viewer space 기반으로 요청하는 게 일반적.
-      실패하면 오류를 띄우되 앱 전체가 죽지 않게 처리.
-    */
     session.requestReferenceSpace("viewer")
       .then((space) => {
         viewerSpace = space;
@@ -616,7 +728,6 @@ function handleHitTest(frame) {
       hitTestSourceRequested = false;
       hitTestSource = null;
       viewerSpace = null;
-      localSpace = null;
     });
   }
 
