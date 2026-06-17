@@ -7,17 +7,21 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <!-- 시작 화면 -->
   <div id="startScreen">
     <div class="startLogo">📱✨</div>
     <h1>SYSMATE AR</h1>
-    <p>실제 제품 GLB 모델을 공간에 배치해보세요.</p>
+    <p>실제 제품 모델을 공간에 배치해보세요.</p>
+
     <button id="startBtnBig">AR 시작</button>
+
     <div class="notice">
-      Android Chrome 기준 WebXR AR을 지원합니다.<br />
-      iPhone은 별도 USDZ/Quick Look 방식이 필요할 수 있습니다.
+      Android Chrome / ARCore 지원 기기 기준입니다.<br />
+      iPhone은 WebXR AR 지원이 제한될 수 있습니다.
     </div>
   </div>
 
+  <!-- 상단 컨트롤 -->
   <div id="topBar">
     <div class="row">
       <label for="productSelect">제품 선택</label>
@@ -43,6 +47,7 @@
     </div>
   </div>
 
+  <!-- 선택 제품 조작 패널 -->
   <div id="editPanel">
     <div id="editTitle">선택된 제품 없음</div>
 
@@ -67,6 +72,16 @@
   <div id="reticle"></div>
   <div id="toast"></div>
   <div id="captureStrip"></div>
+
+  <!-- 중요: importmap은 app.js보다 위에 있어야 함 -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 
   <script type="module" src="js/app.js"></script>
 </body>
