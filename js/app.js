@@ -7,6 +7,7 @@ const $ = (id) => document.getElementById(id);
 const dom = {
   startScreen: $("startScreen"),
   startBtnBig: $("startBtnBig"),
+  previewBtnBig: $("previewBtnBig"),
   topBar: $("topBar"),
   productSelect: $("productSelect"),
   loadBtn: $("loadBtn"),
@@ -133,6 +134,9 @@ function setupPreviewHelpers() {
 
 function bindEvents() {
   safeClick("startBtnBig", startAR);
+  safeClick("previewBtnBig", () => {
+    startPreview("3D 미리보기 모드입니다. 화면을 드래그해서 제품을 회전할 수 있습니다.");
+  });
 
   safeClick("loadBtn", async () => {
     await preloadCurrentProduct();
@@ -238,7 +242,8 @@ async function startAR() {
   console.log("AR 시작 버튼 클릭됨");
 
   if (!navigator.xr) {
-    await startPreview("이 기기는 WebXR AR을 지원하지 않아 3D 미리보기로 전환합니다.");
+    alert("이 브라우저는 WebXR AR을 지원하지 않습니다. 3D 미리보기를 사용하거나 Android Chrome에서 다시 시도해주세요.");
+    showToast("AR 미지원 브라우저입니다.");
     return;
   }
 
@@ -246,7 +251,8 @@ async function startAR() {
     const supported = await navigator.xr.isSessionSupported("immersive-ar");
 
     if (!supported) {
-      await startPreview("현재 기기에서는 AR이 지원되지 않아 3D 미리보기로 전환합니다.");
+      alert("현재 기기/브라우저에서 AR이 지원되지 않습니다. 3D 미리보기를 사용하거나 Android Chrome + ARCore 지원 기기에서 다시 시도해주세요.");
+      showToast("현재 기기에서 AR이 지원되지 않습니다.");
       return;
     }
 
@@ -278,7 +284,8 @@ async function startAR() {
 
   } catch (err) {
     console.error("AR 시작 실패:", err);
-    await startPreview("AR을 시작하지 못해 3D 미리보기로 전환합니다.");
+    alert("AR 시작 실패: " + err.message + "\n\n3D 미리보기 버튼으로 제품을 확인할 수 있습니다.");
+    showToast("AR 시작 실패");
   }
 }
 
