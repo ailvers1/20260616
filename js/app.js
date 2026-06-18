@@ -94,9 +94,6 @@ function setupThree() {
   orbitControls.maxPolarAngle = Math.PI * 0.48;
 
   controller = renderer.xr.getController(0);
-  controller.addEventListener("select", () => {
-    placeCurrentProduct();
-  });
   scene.add(controller);
 
   window.addEventListener("resize", onResize);
@@ -152,13 +149,13 @@ function bindEvents() {
 
   safeClick("clearBtn", clearAll);
 
-  safeClick("moveForward", () => moveSelected(0, -0.05));
-  safeClick("moveBack", () => moveSelected(0, 0.05));
-  safeClick("moveLeft", () => moveSelected(-0.05, 0));
-  safeClick("moveRight", () => moveSelected(0.05, 0));
+  safeClick("moveForward", () => moveSelected("forward"));
+  safeClick("moveBack", () => moveSelected("back"));
+  safeClick("moveLeft", () => moveSelected("left"));
+  safeClick("moveRight", () => moveSelected("right"));
 
-  safeClick("rotateLeft", () => rotateSelected(THREE.MathUtils.degToRad(15)));
-  safeClick("rotateRight", () => rotateSelected(THREE.MathUtils.degToRad(-15)));
+  bindHoldRotate("rotateLeft", 1);
+  bindHoldRotate("rotateRight", -1);
 
   safeClick("heightUp", () => heightSelected(0.05));
   safeClick("heightDown", () => heightSelected(-0.05));
@@ -205,6 +202,59 @@ function safeClick(id, handler) {
   }
 
   el.addEventListener("click", handler);
+}
+
+function bindHoldRotate(id, direction) {
+  const el = document.getElementById(id);
+
+  if (!el) {
+    console.warn(`[버튼 없음] #${id}`);
+    return;
+  }
+
+  let frameId = null;
+  let lastTime = 0;
+  const speed = THREE.MathUtils.degToRad(45);
+
+  const step = (time) => {
+    if (!lastTime) {
+      lastTime = time;
+    }
+
+    const delta = Math.min((time - lastTime) / 1000, 0.05);
+    lastTime = time;
+    rotateSelected(direction * speed * delta, true);
+    frameId = requestAnimationFrame(step);
+  };
+
+  const start = (event) => {
+    event.preventDefault();
+
+    if (!selectedObject) {
+      rotateSelected(0);
+      return;
+    }
+
+    if (frameId !== null) return;
+
+    lastTime = 0;
+    frameId = requestAnimationFrame(step);
+    el.setPointerCapture?.(event.pointerId);
+  };
+
+  const stop = (event) => {
+    if (frameId === null) return;
+
+    cancelAnimationFrame(frameId);
+    frameId = null;
+    lastTime = 0;
+    el.releasePointerCapture?.(event.pointerId);
+  };
+
+  el.addEventListener("pointerdown", start);
+  el.addEventListener("pointerup", stop);
+  el.addEventListener("pointercancel", stop);
+  el.addEventListener("pointerleave", stop);
 }
 
 async function loadManifest() {
@@ -563,19 +613,44 @@ function selectByPointer(event) {
   selectObject(target);
 }
 
-function moveSelected(dx, dz) {
+function moveSelected(direction) {
   if (!selectedObject) {
     showToast("이동할 제품을 선택하세요.");
     return;
   }
 
-  selectedObject.position.x += dx;
-  selectedObject.position.z += dz;
+  const step = 0.05;
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+
+  if (forward.lengthSq() < 0.0001) {
+    forward.set(0, 0, -1);
+  } else {
+    forward.normalize();
+  }
+
+  const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+  const delta = new THREE.Vector3();
+
+  if (direction === "forward") {
+    delta.copy(forward).multiplyScalar(step);
+  } else if (direction === "back") {
+    delta.copy(forward).multiplyScalar(-step);
+  } else if (direction === "left") {
+    delta.copy(right).multiplyScalar(-step);
+  } else if (direction === "right") {
+    delta.copy(right).multiplyScalar(step);
+  }
+
+  selectedObject.position.add(delta);
 }
 
-function rotateSelected(rad) {
+function rotateSelected(rad, silent = false) {
   if (!selectedObject) {
-    showToast("회전할 제품을 선택하세요.");
+    if (!silent) {
+      showToast("회전할 제품을 선택하세요.");
+    }
     return;
   }
 
@@ -588,7 +663,7 @@ function heightSelected(dy) {
     return;
   }
 
-  selectedObject.position.y = Math.max(0, selectedObject.position.y + dy);
+  selectedObject.position.y += dy;
 }
 
 function clearAll() {
