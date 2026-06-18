@@ -43,6 +43,7 @@ let previewGrid;
 
 let hitTestSource = null;
 let hitTestSourceRequested = false;
+let arReferenceSpaceType = "local";
 let previewMode = false;
 
 let products = [];
@@ -259,10 +260,12 @@ async function startAR() {
 
     const session = await navigator.xr.requestSession("immersive-ar", {
       requiredFeatures: ["hit-test"],
-      optionalFeatures: ["dom-overlay"],
+      optionalFeatures: ["dom-overlay", "local-floor"],
       domOverlay: { root: document.body }
     });
 
+    arReferenceSpaceType = await chooseReferenceSpaceType(session);
+    renderer.xr.setReferenceSpaceType(arReferenceSpaceType);
     await renderer.xr.setSession(session);
 
     previewMode = false;
@@ -272,7 +275,7 @@ async function startAR() {
     dom.topBar.classList.add("show");
     dom.reticle.style.display = "block";
 
-    showToast("AR 시작됨. 바닥을 비춰주세요.");
+    showToast(`AR 시작됨. 바닥을 비춰주세요. (${arReferenceSpaceType})`);
 
     session.addEventListener("end", () => {
       hitTestSourceRequested = false;
@@ -288,6 +291,19 @@ async function startAR() {
     alert("AR 시작 실패: " + err.message + "\n\n3D 미리보기 버튼으로 제품을 확인할 수 있습니다.");
     showToast("AR 시작 실패");
   }
+}
+
+async function chooseReferenceSpaceType(session) {
+  for (const type of ["local-floor", "local"]) {
+    try {
+      await session.requestReferenceSpace(type);
+      return type;
+    } catch (err) {
+      console.warn(`Reference space not available: ${type}`, err);
+    }
+  }
+
+  throw new Error("이 기기에서 사용할 수 있는 AR 기준 좌표계를 찾지 못했습니다.");
 }
 
 async function startPreview(message) {
@@ -595,10 +611,13 @@ function render(timestamp, frame) {
     const session = renderer.xr.getSession();
 
     if (!hitTestSourceRequested) {
-      session.requestReferenceSpace("viewer").then((referenceSpace) => {
+      getHitTestReferenceSpace(session).then((referenceSpace) => {
         session.requestHitTestSource({ space: referenceSpace }).then((source) => {
           hitTestSource = source;
         });
+      }).catch((err) => {
+        console.error("Hit-test reference space failed:", err);
+        showToast("바닥 인식 기준을 만들지 못했습니다.");
       });
 
       session.addEventListener("end", () => {
@@ -628,6 +647,15 @@ function render(timestamp, frame) {
   }
 
   renderer.render(scene, camera);
+}
+
+async function getHitTestReferenceSpace(session) {
+  try {
+    return await session.requestReferenceSpace("viewer");
+  } catch (err) {
+    console.warn("Viewer reference space unavailable. Falling back to AR reference space.", err);
+    return session.requestReferenceSpace(arReferenceSpaceType);
+  }
 }
 
 function onResize() {
