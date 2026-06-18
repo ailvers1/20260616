@@ -832,6 +832,11 @@ function updateHistoryButtons() {
 }
 
 async function captureScreen() {
+  if (isArSessionActive()) {
+    showPhoneScreenshotGuide();
+    return;
+  }
+
   try {
     const url = renderer.domElement.toDataURL("image/png");
     const blob = dataUrlToBlob(url);
@@ -872,6 +877,19 @@ async function captureScreen() {
   }
 }
 
+function isArSessionActive() {
+  return Boolean(renderer?.xr?.isPresenting && !previewMode);
+}
+
+function showPhoneScreenshotGuide() {
+  alert(
+    "AR 카메라 화면은 브라우저 보안 제한 때문에 앱 내부 저장으로는 하얗게 나올 수 있습니다.\n\n" +
+    "지금 보이는 화면 그대로 저장하려면 휴대폰 자체 스크린샷을 사용해주세요.\n\n" +
+    "갤럭시: 전원 버튼 + 볼륨 아래 버튼을 동시에 짧게 누르기"
+  );
+  showToast("전원 + 볼륨 아래 버튼으로 화면을 캡처하세요.");
+}
+
 function dataUrlToBlob(dataUrl) {
   const [header, data] = dataUrl.split(",");
   const mime = header.match(/data:(.*?);/)?.[1] || "image/png";
@@ -886,6 +904,18 @@ function dataUrlToBlob(dataUrl) {
 }
 
 function showCapturePrompt() {
+  if (dom.captureHint?.querySelector("span")) {
+    dom.captureHint.querySelector("span").textContent = isArSessionActive()
+      ? "폰 자체 캡처 사용"
+      : "배치 완료";
+  }
+
+  if (dom.captureHintBtn) {
+    dom.captureHintBtn.textContent = isArSessionActive()
+      ? "📸 캡처 방법"
+      : "📸 화면저장";
+  }
+
   if (dom.captureHint) {
     dom.captureHint.classList.add("show");
   }
