@@ -12,6 +12,8 @@ const dom = {
   productSelect: $("productSelect"),
   loadBtn: $("loadBtn"),
   placeBtn: $("placeBtn"),
+  undoBtn: $("undoBtn"),
+  redoBtn: $("redoBtn"),
   captureBtn: $("captureBtn"),
   clearBtn: $("clearBtn"),
   lockScale: $("lockScale"),
@@ -50,6 +52,9 @@ let products = [];
 let currentProduct = null;
 let selectedObject = null;
 let placedObjects = [];
+let historyStack = [];
+let redoStack = [];
+let isRestoringHistory = false;
 
 const gltfLoader = new GLTFLoader();
 const modelCache = new Map();
@@ -63,6 +68,7 @@ async function init() {
   setupPreviewHelpers();
   bindEvents();
   await loadManifest();
+  updateHistoryButtons();
   animate();
 }
 
@@ -145,6 +151,9 @@ function bindEvents() {
     placeCurrentProduct();
   });
 
+  safeClick("undoBtn", undoLastAction);
+  safeClick("redoBtn", redoLastAction);
+
   safeClick("captureBtn", captureScreen);
 
   safeClick("clearBtn", clearAll);
@@ -214,6 +223,7 @@ function bindHoldRotate(id, direction) {
 
   let frameId = null;
   let lastTime = 0;
+  let beforeRotate = null;
   const speed = THREE.MathUtils.degToRad(45);
 
   const step = (time) => {
@@ -237,9 +247,15 @@ function bindHoldRotate(id, direction) {
 
     if (frameId !== null) return;
 
+    beforeRotate = snapshotScene();
     lastTime = 0;
     frameId = requestAnimationFrame(step);
-    el.setPointerCapture?.(event.pointerId);
+
+    try {
+      el.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is helpful, but not required for hold-to-rotate.
+    }
   };
 
   const stop = (event) => {
@@ -248,7 +264,14 @@ function bindHoldRotate(id, direction) {
     cancelAnimationFrame(frameId);
     frameId = null;
     lastTime = 0;
-    el.releasePointerCapture?.(event.pointerId);
+    recordHistory(beforeRotate);
+    beforeRotate = null;
+
+    try {
+      el.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Some mobile browsers release pointer capture automatically.
+    }
   };
 
   el.addEventListener("pointerdown", start);
@@ -431,11 +454,12 @@ async function placeCurrentProduct() {
   }
 
   try {
+    const before = snapshotScene();
     const model = await loadModel(currentProduct);
 
     model.matrixAutoUpdate = true;
     model.position.setFromMatrixPosition(reticleObject.matrix);
-    model.quaternion.setFromRotationMatrix(reticleObject.matrix);
+    faceModelToCamera(model);
 
     if (currentProduct.rotationYDeg) {
       model.rotation.y += THREE.MathUtils.degToRad(currentProduct.rotationYDeg);
@@ -452,6 +476,7 @@ async function placeCurrentProduct() {
     scene.add(model);
     placedObjects.push(model);
     selectObject(model);
+    recordHistory(before);
 
     showToast(`${currentProduct.name} 배치 완료`);
   } catch (err) {
@@ -467,6 +492,7 @@ async function placePreviewProduct() {
   }
 
   try {
+    const before = snapshotScene();
     clearPlacedObjects();
 
     const model = await loadModel(currentProduct);
@@ -489,6 +515,7 @@ async function placePreviewProduct() {
     placedObjects.push(model);
     selectObject(model);
     framePreviewCamera(model);
+    recordHistory(before);
   } catch (err) {
     console.error(err);
     showToast("3D 미리보기 로드 실패");
@@ -505,6 +532,20 @@ function framePreviewCamera(model) {
   camera.position.set(center.x, center.y + radius * 0.35, center.z + radius * 1.8);
   camera.lookAt(center);
   orbitControls.update();
+}
+
+function faceModelToCamera(model) {
+  const cameraPosition = new THREE.Vector3();
+  camera.getWorldPosition(cameraPosition);
+
+  const dx = cameraPosition.x - model.position.x;
+  const dz = cameraPosition.z - model.position.z;
+
+  if (dx * dx + dz * dz < 0.0001) {
+    return;
+  }
+
+  model.rotation.set(0, Math.atan2(dx, dz), 0);
 }
 
 function loadModel(product) {
@@ -619,6 +660,7 @@ function moveSelected(direction) {
     return;
   }
 
+  const before = snapshotScene();
   const step = 0.05;
   const forward = new THREE.Vector3();
   camera.getWorldDirection(forward);
@@ -644,6 +686,7 @@ function moveSelected(direction) {
   }
 
   selectedObject.position.add(delta);
+  recordHistory(before);
 }
 
 function rotateSelected(rad, silent = false) {
@@ -663,12 +706,16 @@ function heightSelected(dy) {
     return;
   }
 
+  const before = snapshotScene();
   selectedObject.position.y += dy;
+  recordHistory(before);
 }
 
 function clearAll() {
+  const before = snapshotScene();
   clearPlacedObjects();
   selectObject(null);
+  recordHistory(before);
   showToast("전체 삭제 완료");
 }
 
@@ -678,6 +725,101 @@ function clearPlacedObjects() {
   }
 
   placedObjects = [];
+}
+
+function snapshotScene() {
+  return placedObjects.map((obj) => ({
+    productId: obj.userData.productId,
+    productName: obj.userData.productName,
+    position: obj.position.toArray(),
+    quaternion: obj.quaternion.toArray(),
+    scale: obj.scale.toArray()
+  }));
+}
+
+function recordHistory(before) {
+  if (isRestoringHistory || !before) return;
+
+  const after = snapshotScene();
+
+  if (JSON.stringify(before) === JSON.stringify(after)) {
+    return;
+  }
+
+  historyStack.push(before);
+
+  if (historyStack.length > 50) {
+    historyStack.shift();
+  }
+
+  redoStack = [];
+  updateHistoryButtons();
+}
+
+async function undoLastAction() {
+  if (!historyStack.length || isRestoringHistory) {
+    showToast("취소할 작업이 없습니다.");
+    return;
+  }
+
+  const current = snapshotScene();
+  const previous = historyStack.pop();
+  redoStack.push(current);
+  await restoreScene(previous);
+  updateHistoryButtons();
+  showToast("이전 작업으로 되돌렸습니다.");
+}
+
+async function redoLastAction() {
+  if (!redoStack.length || isRestoringHistory) {
+    showToast("복구할 작업이 없습니다.");
+    return;
+  }
+
+  const current = snapshotScene();
+  const next = redoStack.pop();
+  historyStack.push(current);
+  await restoreScene(next);
+  updateHistoryButtons();
+  showToast("작업을 다시 적용했습니다.");
+}
+
+async function restoreScene(snapshot) {
+  isRestoringHistory = true;
+
+  try {
+    clearPlacedObjects();
+
+    for (const item of snapshot) {
+      const product = products.find((p) => p.id === item.productId);
+
+      if (!product) continue;
+
+      const model = await loadModel(product);
+      model.position.fromArray(item.position);
+      model.quaternion.fromArray(item.quaternion);
+      model.scale.fromArray(item.scale);
+      model.userData.productId = item.productId;
+      model.userData.productName = item.productName || product.name;
+
+      scene.add(model);
+      placedObjects.push(model);
+    }
+
+    selectObject(placedObjects[placedObjects.length - 1] || null);
+  } finally {
+    isRestoringHistory = false;
+  }
+}
+
+function updateHistoryButtons() {
+  if (dom.undoBtn) {
+    dom.undoBtn.disabled = !historyStack.length;
+  }
+
+  if (dom.redoBtn) {
+    dom.redoBtn.disabled = !redoStack.length;
+  }
 }
 
 function captureScreen() {
