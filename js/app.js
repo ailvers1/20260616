@@ -75,6 +75,7 @@ function setupThree() {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
+  renderer.xr.setReferenceSpaceType("local");
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   document.body.appendChild(renderer.domElement);
