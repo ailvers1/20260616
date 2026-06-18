@@ -23,6 +23,8 @@ const dom = {
   editPanel: $("editPanel"),
   editTitle: $("editTitle"),
   toast: $("toast"),
+  captureHint: $("captureHint"),
+  captureHintBtn: $("captureHintBtn"),
   captureStrip: $("captureStrip"),
 
   moveForward: $("moveForward"),
@@ -103,6 +105,11 @@ function setupThree() {
   scene.add(controller);
 
   window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", () => {
+    setTimeout(onResize, 250);
+  });
+
+  window.visualViewport?.addEventListener("resize", onResize);
 }
 
 function setupLights() {
@@ -155,6 +162,7 @@ function bindEvents() {
   safeClick("redoBtn", redoLastAction);
 
   safeClick("captureBtn", captureScreen);
+  safeClick("captureHintBtn", captureScreen);
 
   safeClick("clearBtn", clearAll);
 
@@ -477,8 +485,9 @@ async function placeCurrentProduct() {
     placedObjects.push(model);
     selectObject(model);
     recordHistory(before);
+    showCapturePrompt();
 
-    showToast(`${currentProduct.name} 배치 완료`);
+    showToast(`${currentProduct.name} 배치 완료. 화면저장을 눌러 촬영하세요.`);
   } catch (err) {
     console.error(err);
     showToast("모델 배치 실패");
@@ -822,9 +831,11 @@ function updateHistoryButtons() {
   }
 }
 
-function captureScreen() {
+async function captureScreen() {
   try {
     const url = renderer.domElement.toDataURL("image/png");
+    const blob = dataUrlToBlob(url);
+    const file = new File([blob], `sysmate-ar-${Date.now()}.png`, { type: "image/png" });
 
     const img = document.createElement("img");
     img.src = url;
@@ -834,10 +845,63 @@ function captureScreen() {
     });
 
     dom.captureStrip.prepend(img);
-    showToast("캡처 완료");
+
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: "SYSMATE AR 화면"
+      });
+      showToast("화면저장 공유창을 열었습니다.");
+    } else {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      showToast("화면저장 완료");
+    }
+
+    hideCapturePrompt();
   } catch (err) {
     console.error(err);
-    showToast("캡처 실패");
+
+    if (err?.name === "AbortError") {
+      showToast("화면저장을 취소했습니다.");
+    } else {
+      showToast("캡처 실패");
+    }
+  }
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [header, data] = dataUrl.split(",");
+  const mime = header.match(/data:(.*?);/)?.[1] || "image/png";
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return new Blob([bytes], { type: mime });
+}
+
+function showCapturePrompt() {
+  if (dom.captureHint) {
+    dom.captureHint.classList.add("show");
+  }
+
+  if (dom.captureBtn) {
+    dom.captureBtn.classList.add("attention");
+  }
+}
+
+function hideCapturePrompt() {
+  if (dom.captureHint) {
+    dom.captureHint.classList.remove("show");
+  }
+
+  if (dom.captureBtn) {
+    dom.captureBtn.classList.remove("attention");
   }
 }
 
@@ -902,6 +966,7 @@ async function getHitTestReferenceSpace(session) {
 }
 
 function onResize() {
+  renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
