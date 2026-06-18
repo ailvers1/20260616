@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,10 +36,13 @@ let renderer;
 let scene;
 let camera;
 let controller;
+let orbitControls;
 let reticleObject;
+let previewGrid;
 
 let hitTestSource = null;
 let hitTestSourceRequested = false;
+let previewMode = false;
 
 let products = [];
 let currentProduct = null;
@@ -54,6 +58,7 @@ async function init() {
   setupThree();
   setupLights();
   setupReticle();
+  setupPreviewHelpers();
   bindEvents();
   await loadManifest();
   animate();
@@ -74,7 +79,16 @@ function setupThree() {
   document.body.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera();
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+  camera.position.set(0, 1.35, 3);
+
+  orbitControls = new OrbitControls(camera, renderer.domElement);
+  orbitControls.enabled = false;
+  orbitControls.enableDamping = true;
+  orbitControls.target.set(0, 0.95, 0);
+  orbitControls.minDistance = 1.2;
+  orbitControls.maxDistance = 5;
+  orbitControls.maxPolarAngle = Math.PI * 0.48;
 
   controller = renderer.xr.getController(0);
   controller.addEventListener("select", () => {
@@ -109,6 +123,14 @@ function setupReticle() {
   scene.add(reticleObject);
 }
 
+function setupPreviewHelpers() {
+  previewGrid = new THREE.GridHelper(4, 20, 0x38bdf8, 0x334155);
+  previewGrid.material.transparent = true;
+  previewGrid.material.opacity = 0.35;
+  previewGrid.visible = false;
+  scene.add(previewGrid);
+}
+
 function bindEvents() {
   safeClick("startBtnBig", startAR);
 
@@ -140,6 +162,10 @@ function bindEvents() {
       const id = dom.productSelect.value;
       currentProduct = products.find((p) => p.id === id) || null;
       showToast(`${currentProduct?.name || "제품"} 선택됨`);
+
+      if (previewMode) {
+        placePreviewProduct();
+      }
     });
   }
 
@@ -212,8 +238,7 @@ async function startAR() {
   console.log("AR 시작 버튼 클릭됨");
 
   if (!navigator.xr) {
-    alert("이 브라우저는 WebXR AR을 지원하지 않습니다. Android Chrome에서 테스트해주세요.");
-    showToast("WebXR AR 미지원 브라우저입니다.");
+    await startPreview("이 기기는 WebXR AR을 지원하지 않아 3D 미리보기로 전환합니다.");
     return;
   }
 
@@ -221,8 +246,7 @@ async function startAR() {
     const supported = await navigator.xr.isSessionSupported("immersive-ar");
 
     if (!supported) {
-      alert("현재 기기/브라우저에서 AR이 지원되지 않습니다. Android Chrome + ARCore 지원 기기에서 테스트해주세요.");
-      showToast("현재 기기에서 AR이 지원되지 않습니다.");
+      await startPreview("현재 기기에서는 AR이 지원되지 않아 3D 미리보기로 전환합니다.");
       return;
     }
 
@@ -234,6 +258,9 @@ async function startAR() {
 
     await renderer.xr.setSession(session);
 
+    previewMode = false;
+    orbitControls.enabled = false;
+    previewGrid.visible = false;
     dom.startScreen.classList.add("hidden");
     dom.topBar.classList.add("show");
     dom.reticle.style.display = "block";
@@ -251,9 +278,24 @@ async function startAR() {
 
   } catch (err) {
     console.error("AR 시작 실패:", err);
-    alert("AR 시작 실패: " + err.message);
-    showToast("AR 시작 실패");
+    await startPreview("AR을 시작하지 못해 3D 미리보기로 전환합니다.");
   }
+}
+
+async function startPreview(message) {
+  previewMode = true;
+  hitTestSourceRequested = false;
+  hitTestSource = null;
+  reticleObject.visible = false;
+  previewGrid.visible = true;
+  orbitControls.enabled = true;
+
+  dom.startScreen.classList.add("hidden");
+  dom.topBar.classList.add("show");
+  dom.reticle.style.display = "none";
+
+  await placePreviewProduct();
+  showToast(message);
 }
 
 async function preloadCurrentProduct() {
@@ -275,6 +317,11 @@ async function preloadCurrentProduct() {
 async function placeCurrentProduct() {
   if (!currentProduct) {
     showToast("제품을 먼저 선택하세요.");
+    return;
+  }
+
+  if (previewMode) {
+    await placePreviewProduct();
     return;
   }
 
@@ -311,6 +358,53 @@ async function placeCurrentProduct() {
     console.error(err);
     showToast("모델 배치 실패");
   }
+}
+
+async function placePreviewProduct() {
+  if (!currentProduct) {
+    showToast("제품을 먼저 선택하세요.");
+    return;
+  }
+
+  try {
+    clearPlacedObjects();
+
+    const model = await loadModel(currentProduct);
+    model.matrixAutoUpdate = true;
+    model.position.set(0, 0, 0);
+
+    if (currentProduct.rotationYDeg) {
+      model.rotation.y += THREE.MathUtils.degToRad(currentProduct.rotationYDeg);
+    }
+
+    if (!dom.lockScale.checked) {
+      const s = Number(dom.scaleRange.value) / 100;
+      model.scale.setScalar(s);
+    }
+
+    model.userData.productId = currentProduct.id;
+    model.userData.productName = currentProduct.name;
+
+    scene.add(model);
+    placedObjects.push(model);
+    selectObject(model);
+    framePreviewCamera(model);
+  } catch (err) {
+    console.error(err);
+    showToast("3D 미리보기 로드 실패");
+  }
+}
+
+function framePreviewCamera(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(size.x, size.y, size.z, 1);
+
+  orbitControls.target.copy(center);
+  camera.position.set(center.x, center.y + radius * 0.35, center.z + radius * 1.8);
+  camera.lookAt(center);
+  orbitControls.update();
 }
 
 function loadModel(product) {
@@ -448,13 +542,17 @@ function heightSelected(dy) {
 }
 
 function clearAll() {
+  clearPlacedObjects();
+  selectObject(null);
+  showToast("전체 삭제 완료");
+}
+
+function clearPlacedObjects() {
   for (const obj of placedObjects) {
     scene.remove(obj);
   }
 
   placedObjects = [];
-  selectObject(null);
-  showToast("전체 삭제 완료");
 }
 
 function captureScreen() {
@@ -481,6 +579,10 @@ function animate() {
 }
 
 function render(timestamp, frame) {
+  if (previewMode) {
+    orbitControls.update();
+  }
+
   if (frame) {
     const session = renderer.xr.getSession();
 
