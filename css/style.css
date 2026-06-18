@@ -138,6 +138,8 @@ button {
   color: white;
   font-size: 13px;
   cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 button:active {
