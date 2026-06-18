@@ -1,7 +1,9 @@
 html,
 body {
   margin: 0;
+  width: 100%;
   height: 100%;
+  min-height: 100dvh;
   overflow: hidden;
   background: #000;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
@@ -160,6 +162,21 @@ button:disabled {
   background: rgba(245,158,11,.78);
 }
 
+#captureBtn.attention {
+  animation: capturePulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(245,158,11,.28);
+}
+
+@keyframes capturePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
 #clearBtn {
   background: rgba(220,38,38,.75);
 }
@@ -264,6 +281,40 @@ button:disabled {
   text-align: center;
 }
 
+#captureHint {
+  position: fixed;
+  left: 50%;
+  bottom: 78px;
+  z-index: 65;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  padding: 10px 12px 10px 16px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 999px;
+  background: rgba(0,0,0,.88);
+  color: white;
+  box-shadow: 0 8px 26px rgba(0,0,0,.35);
+}
+
+#captureHint.show {
+  display: flex;
+}
+
+#captureHint span {
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#captureHint button {
+  background: rgba(245,158,11,.86);
+  border-color: rgba(255,255,255,.36);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
 #captureStrip {
   position: fixed;
   right: 12px;
@@ -299,5 +350,64 @@ button:disabled {
 
   #editPanel {
     width: 176px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  #startScreen {
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: 18px 24px;
+  }
+
+  .startLogo {
+    font-size: 36px;
+    margin-bottom: 8px;
+  }
+
+  #startScreen h1 {
+    font-size: 26px;
+  }
+
+  #startScreen p {
+    margin-bottom: 14px;
+  }
+
+  .notice {
+    margin-top: 14px;
+  }
+
+  #topBar {
+    right: auto;
+    bottom: 0;
+    width: min(330px, 42vw);
+    overflow-y: auto;
+    padding: 10px;
+    background: linear-gradient(to right, rgba(0,0,0,.9), rgba(0,0,0,.58));
+  }
+
+  #topBar .row {
+    gap: 6px;
+  }
+
+  #editPanel {
+    left: auto;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  #toast {
+    bottom: 24px;
+    max-width: 46vw;
+  }
+
+  #captureHint {
+    bottom: 16px;
+  }
+
+  #captureStrip {
+    right: 216px;
+    bottom: 12px;
+    flex-direction: row;
   }
 }
