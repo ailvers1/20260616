@@ -25,7 +25,8 @@
       "file": "models/photo_kiosk_black.glb",
       "width": 0.562,
       "height": 1.907,
-      "depth": 0.757
+      "depth": 0.757,
+      "rotationYDeg": 180
     }
   ]
 }
