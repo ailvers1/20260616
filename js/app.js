@@ -288,9 +288,35 @@ async function startAR() {
 
   } catch (err) {
     console.error("AR 시작 실패:", err);
+    if (isReferenceSpaceError(err) && currentProduct) {
+      openNativeArFallback(currentProduct);
+      showToast("기본 AR 뷰어로 전환합니다.");
+      return;
+    }
+
     alert("AR 시작 실패: " + err.message + "\n\n3D 미리보기 버튼으로 제품을 확인할 수 있습니다.");
     showToast("AR 시작 실패");
   }
+}
+
+function isReferenceSpaceError(err) {
+  return String(err?.message || err).includes("reference space");
+}
+
+function openNativeArFallback(product) {
+  const fileUrl = new URL(product.file, window.location.href).href;
+  const fallbackUrl = new URL(window.location.href);
+  fallbackUrl.searchParams.set("mode", "preview");
+
+  const sceneViewerUrl =
+    "intent://arvr.google.com/scene-viewer/1.0" +
+    `?file=${encodeURIComponent(fileUrl)}` +
+    "&mode=ar_preferred" +
+    `&title=${encodeURIComponent(product.name)}` +
+    "#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;" +
+    `S.browser_fallback_url=${encodeURIComponent(fallbackUrl.href)};end;`;
+
+  window.location.href = sceneViewerUrl;
 }
 
 async function chooseReferenceSpaceType(session) {
