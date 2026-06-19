@@ -14,7 +14,6 @@ const dom = {
   placeBtn: $("placeBtn"),
   undoBtn: $("undoBtn"),
   redoBtn: $("redoBtn"),
-  captureBtn: $("captureBtn"),
   clearBtn: $("clearBtn"),
   lockScale: $("lockScale"),
   scaleRange: $("scaleRange"),
@@ -22,6 +21,8 @@ const dom = {
   reticle: $("reticle"),
   editPanel: $("editPanel"),
   editTitle: $("editTitle"),
+  editToggleBtn: $("editToggleBtn"),
+  editControls: $("editControls"),
   toast: $("toast"),
   captureHint: $("captureHint"),
   captureHintBtn: $("captureHintBtn"),
@@ -57,6 +58,7 @@ let placedObjects = [];
 let historyStack = [];
 let redoStack = [];
 let isRestoringHistory = false;
+let editPanelExpanded = false;
 
 const gltfLoader = new GLTFLoader();
 const modelCache = new Map();
@@ -160,8 +162,7 @@ function bindEvents() {
 
   safeClick("undoBtn", undoLastAction);
   safeClick("redoBtn", redoLastAction);
-
-  safeClick("captureBtn", captureScreen);
+  safeClick("editToggleBtn", toggleEditPanel);
   safeClick("captureHintBtn", captureScreen);
 
   safeClick("clearBtn", clearAll);
@@ -628,10 +629,29 @@ function selectObject(obj) {
 
   dom.editPanel.classList.add("show");
   dom.editTitle.textContent = obj.userData.productName || "선택된 제품";
+  editPanelExpanded = false;
+  updateEditPanelState();
 
   const scalePct = Math.round(obj.scale.x * 100);
   dom.scaleRange.value = scalePct;
   dom.scaleValue.textContent = `${scalePct}%`;
+}
+
+function toggleEditPanel() {
+  if (!selectedObject) {
+    showToast("조작할 제품을 먼저 선택하세요.");
+    return;
+  }
+
+  editPanelExpanded = !editPanelExpanded;
+  updateEditPanelState();
+}
+
+function updateEditPanelState() {
+  if (!dom.editPanel || !dom.editToggleBtn) return;
+
+  dom.editPanel.classList.toggle("collapsed", !editPanelExpanded);
+  dom.editToggleBtn.textContent = editPanelExpanded ? "닫기" : "조작";
 }
 
 function selectByPointer(event) {
@@ -920,9 +940,6 @@ function showCapturePrompt() {
     dom.captureHint.classList.add("show");
   }
 
-  if (dom.captureBtn) {
-    dom.captureBtn.classList.add("attention");
-  }
 }
 
 function hideCapturePrompt() {
@@ -930,9 +947,6 @@ function hideCapturePrompt() {
     dom.captureHint.classList.remove("show");
   }
 
-  if (dom.captureBtn) {
-    dom.captureBtn.classList.remove("attention");
-  }
 }
 
 function animate() {
