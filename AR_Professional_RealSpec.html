@@ -45,30 +45,34 @@
       <button id="placeBtn">📍 배치</button>
       <button id="undoBtn">↶ 취소</button>
       <button id="redoBtn">↷ 복구</button>
-      <button id="captureBtn">📸 화면저장</button>
       <button id="clearBtn">🗑️ 전체삭제</button>
     </div>
   </div>
 
   <!-- 선택 제품 조작 패널 -->
   <div id="editPanel">
-    <div id="editTitle">선택된 제품 없음</div>
-
-    <div class="pad">
-      <button id="moveForward">▲</button>
-      <button id="moveLeft">◀</button>
-      <button id="moveRight">▶</button>
-      <button id="moveBack">▼</button>
+    <div id="editHeader">
+      <div id="editTitle">선택된 제품 없음</div>
+      <button id="editToggleBtn">조작</button>
     </div>
 
-    <div class="row small">
-      <button id="rotateLeft">⟲ 회전</button>
-      <button id="rotateRight">회전 ⟳</button>
-    </div>
+    <div id="editControls">
+      <div class="pad">
+        <button id="moveForward">▲</button>
+        <button id="moveLeft">◀</button>
+        <button id="moveRight">▶</button>
+        <button id="moveBack">▼</button>
+      </div>
 
-    <div class="row small">
-      <button id="heightDown">높이 -</button>
-      <button id="heightUp">높이 +</button>
+      <div class="row small">
+        <button id="rotateLeft">⟲ 회전</button>
+        <button id="rotateRight">회전 ⟳</button>
+      </div>
+
+      <div class="row small">
+        <button id="heightDown">높이 -</button>
+        <button id="heightUp">높이 +</button>
+      </div>
     </div>
   </div>
 
