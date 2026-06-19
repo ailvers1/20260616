@@ -158,25 +158,6 @@ button:disabled {
   background: rgba(14,165,233,.75);
 }
 
-#captureBtn {
-  background: rgba(245,158,11,.78);
-}
-
-#captureBtn.attention {
-  animation: capturePulse 1.2s ease-in-out infinite;
-  box-shadow: 0 0 0 3px rgba(245,158,11,.28);
-}
-
-@keyframes capturePulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.06);
-  }
-}
-
 #clearBtn {
   background: rgba(220,38,38,.75);
 }
@@ -232,10 +213,37 @@ button:disabled {
   display: flex;
 }
 
+#editPanel.collapsed {
+  width: min(260px, calc(100vw - 24px));
+}
+
+#editPanel.collapsed #editControls {
+  display: none;
+}
+
+#editHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 #editTitle {
   font-size: 13px;
   font-weight: 700;
   color: #7dd3fc;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#editToggleBtn {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(14,165,233,.74);
+  font-weight: 800;
 }
 
 .pad {
@@ -284,7 +292,7 @@ button:disabled {
 #captureHint {
   position: fixed;
   left: 50%;
-  bottom: 78px;
+  top: calc(env(safe-area-inset-top, 0px) + 128px);
   z-index: 65;
   display: none;
   align-items: center;
@@ -336,6 +344,10 @@ button:disabled {
 @media (max-width: 520px) {
   #topBar {
     padding: 10px;
+  }
+
+  #captureHint {
+    top: calc(env(safe-area-inset-top, 0px) + 150px);
   }
 
   select {
@@ -402,7 +414,11 @@ button:disabled {
   }
 
   #captureHint {
-    bottom: 16px;
+    top: 16px;
+    bottom: auto;
+    left: auto;
+    right: 12px;
+    transform: none;
   }
 
   #captureStrip {
