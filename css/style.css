@@ -329,19 +329,23 @@ button:disabled {
 
 #captureHint {
   position: fixed;
-  left: 50%;
-  top: calc(env(safe-area-inset-top, 0px) + 128px);
+  left: 12px;
+  right: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 88px);
   z-index: 65;
   display: none;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  transform: translateX(-50%);
-  padding: 10px 12px 10px 16px;
+  transform: none;
+  min-height: 34px;
+  padding: 6px 10px;
   border: 1px solid rgba(255,255,255,.22);
-  border-radius: 999px;
-  background: rgba(0,0,0,.88);
+  border-radius: 10px;
+  background: rgba(0,0,0,.72);
   color: white;
-  box-shadow: 0 8px 26px rgba(0,0,0,.35);
+  box-shadow: 0 8px 22px rgba(0,0,0,.24);
+  backdrop-filter: blur(12px);
 }
 
 #captureHint.show {
@@ -350,14 +354,16 @@ button:disabled {
 
 #captureHint span {
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 #captureHint button {
-  background: rgba(245,158,11,.86);
+  padding: 5px 10px;
+  background: rgba(245,158,11,.82);
   border-color: rgba(255,255,255,.36);
   border-radius: 999px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -424,7 +430,7 @@ button:disabled {
   }
 
   #captureHint {
-    top: calc(env(safe-area-inset-top, 0px) + 150px);
+    top: calc(env(safe-area-inset-top, 0px) + 118px);
   }
 
   select {
@@ -508,9 +514,9 @@ button:disabled {
   }
 
   #captureHint {
-    top: 16px;
+    top: 12px;
     bottom: auto;
-    left: auto;
+    left: 12px;
     right: 12px;
     transform: none;
   }
