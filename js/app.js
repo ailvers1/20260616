@@ -727,6 +727,7 @@ function addAiKioskTextureOverlays(root, screenTextures, speakerTexture) {
   );
   screen.name = "AI kiosk visible screen texture";
   screen.position.copy(AI_KIOSK_OVERLAYS.screen.center);
+  screen.rotation.y = Math.PI;
   screen.renderOrder = 30;
   screen.userData.screenTextures = screenTextures;
   screen.userData.textureSwapMs = TEXTURE_SWAP_MS;
@@ -739,11 +740,14 @@ function addAiKioskTextureOverlays(root, screenTextures, speakerTexture) {
       toneMapped: false,
       side: THREE.DoubleSide,
       depthTest: true,
-      depthWrite: false
+      depthWrite: false,
+      transparent: true,
+      alphaTest: 0.08
     })
   );
   speaker.name = "AI kiosk visible speaker texture";
   speaker.position.copy(AI_KIOSK_OVERLAYS.speaker.center);
+  speaker.rotation.y = Math.PI;
   speaker.renderOrder = 31;
   root.add(speaker);
 }
