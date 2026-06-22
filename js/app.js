@@ -594,7 +594,7 @@ function faceModelToCamera(model) {
 function loadModel(product) {
   if (modelCache.has(product.id)) {
     const model = cloneModel(modelCache.get(product.id));
-    applyProductTextures(product, model);
+    safelyApplyProductTextures(product, model);
     return Promise.resolve(model);
   }
 
@@ -621,13 +621,21 @@ function loadModel(product) {
 
         modelCache.set(product.id, root);
         const model = cloneModel(root);
-        applyProductTextures(product, model);
+        safelyApplyProductTextures(product, model);
         resolve(model);
       },
       undefined,
       reject
     );
   });
+}
+
+function safelyApplyProductTextures(product, model) {
+  try {
+    applyProductTextures(product, model);
+  } catch (err) {
+    console.warn("Product texture application skipped.", err);
+  }
 }
 
 function prepareMaterial(material) {
@@ -694,9 +702,13 @@ function loadAppTexture(url) {
 function ensurePlanarUv(geometry, axes = "xy") {
   if (geometry.getAttribute("uv")) return;
 
+  const position = geometry.getAttribute("position");
+  if (!position) return;
+
   geometry.computeBoundingBox();
   const box = geometry.boundingBox;
-  const position = geometry.getAttribute("position");
+  if (!box) return;
+
   const uv = [];
 
   const axisA = axes[0];
