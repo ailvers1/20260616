@@ -11,14 +11,14 @@
   <div id="startScreen">
     <div class="startLogo">📱✨</div>
     <h1>SYSMATE AR</h1>
-    <p>지원 기기는 AR로, 그 외 기기는 3D 미리보기로 제품을 확인해보세요.</p>
+    <p>Android Chrome에서는 AR 배치를, 지원되지 않는 기기에서는 3D 미리보기를 사용하세요.</p>
 
     <button id="startBtnBig">AR 시작</button>
     <button id="previewBtnBig" class="secondary">3D 미리보기</button>
 
     <div class="notice">
-      Android Chrome / ARCore 지원 기기 기준입니다.<br />
-      AR이 실행되지 않는 기기에서는 3D 미리보기를 선택해주세요.
+      AR이 열리지 않으면 자동으로 기본 AR 뷰어 또는 3D 미리보기로 안내됩니다.<br />
+      권장 환경: Android Chrome / ARCore 지원 기기
     </div>
   </div>
 
@@ -80,9 +80,14 @@
   <div id="toast"></div>
   <div id="captureHint">
     <span>배치 완료</span>
-    <button id="captureHintBtn">📸 화면저장</button>
+    <button id="captureHintBtn">📸 캡처 안내</button>
   </div>
   <div id="captureStrip"></div>
+
+  <div id="loadingOverlay">
+    <div class="loader"></div>
+    <div id="loadingText">모델 불러오는 중...</div>
+  </div>
 
   <!-- 중요: importmap은 app.js보다 위에 있어야 함 -->
   <script type="importmap">
