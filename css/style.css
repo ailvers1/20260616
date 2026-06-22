@@ -16,6 +16,53 @@ canvas {
   touch-action: none;
 }
 
+#photoPreviewBg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: none;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+#photoPreviewBg.show {
+  display: block;
+}
+
+#photoInput {
+  display: none;
+}
+
+#photoPreviewHint {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 88px);
+  z-index: 64;
+  display: none;
+  justify-content: center;
+  pointer-events: none;
+}
+
+#photoPreviewHint.show {
+  display: flex;
+}
+
+#photoPreviewHint span {
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 7px 12px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 999px;
+  background: rgba(0,0,0,.62);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+  backdrop-filter: blur(12px);
+}
+
 button,
 select,
 input {
