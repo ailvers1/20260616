@@ -27,6 +27,8 @@ const dom = {
   captureHint: $("captureHint"),
   captureHintBtn: $("captureHintBtn"),
   captureStrip: $("captureStrip"),
+  loadingOverlay: $("loadingOverlay"),
+  loadingText: $("loadingText"),
 
   moveForward: $("moveForward"),
   moveBack: $("moveBack"),
@@ -326,7 +328,7 @@ async function startAR() {
   console.log("AR 시작 버튼 클릭됨");
 
   if (!navigator.xr) {
-    alert("이 브라우저는 WebXR AR을 지원하지 않습니다. 3D 미리보기를 사용하거나 Android Chrome에서 다시 시도해주세요.");
+    alert("이 브라우저에서는 AR 배치가 지원되지 않습니다.\n\n3D 미리보기를 사용하거나 Android Chrome에서 다시 시도해주세요.");
     showToast("AR 미지원 브라우저입니다.");
     return;
   }
@@ -335,7 +337,7 @@ async function startAR() {
     const supported = await navigator.xr.isSessionSupported("immersive-ar");
 
     if (!supported) {
-      alert("현재 기기/브라우저에서 AR이 지원되지 않습니다. 3D 미리보기를 사용하거나 Android Chrome + ARCore 지원 기기에서 다시 시도해주세요.");
+      alert("현재 기기/브라우저에서는 WebXR AR이 지원되지 않습니다.\n\n3D 미리보기로 제품을 확인하거나, Android Chrome + ARCore 지원 기기에서 다시 시도해주세요.");
       showToast("현재 기기에서 AR이 지원되지 않습니다.");
       return;
     }
@@ -371,6 +373,7 @@ async function startAR() {
   } catch (err) {
     console.error("AR 시작 실패:", err);
     if (isReferenceSpaceError(err) && currentProduct) {
+      alert("이 기기는 WebXR AR 기준 좌표계를 지원하지 않아 기본 AR 뷰어로 전환합니다.\n\n기본 AR 뷰어에서는 제품 확인은 가능하지만 앱 안의 이동/회전 버튼은 사용할 수 없습니다.");
       openNativeArFallback(currentProduct);
       showToast("기본 AR 뷰어로 전환합니다.");
       return;
@@ -437,12 +440,15 @@ async function preloadCurrentProduct() {
   }
 
   try {
+    setLoading(true, "모델 불러오는 중...");
     showToast("모델 불러오는 중...");
     await loadModel(currentProduct);
     showToast("모델 준비 완료");
   } catch (err) {
     console.error(err);
     showToast("모델 로드 실패. 경로와 파일명을 확인하세요.");
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -464,6 +470,7 @@ async function placeCurrentProduct() {
 
   try {
     const before = snapshotScene();
+    setLoading(true, `${currentProduct.name} 불러오는 중...`);
     const model = await loadModel(currentProduct);
 
     model.matrixAutoUpdate = true;
@@ -492,6 +499,8 @@ async function placeCurrentProduct() {
   } catch (err) {
     console.error(err);
     showToast("모델 배치 실패");
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -503,6 +512,7 @@ async function placePreviewProduct() {
 
   try {
     const before = snapshotScene();
+    setLoading(true, `${currentProduct.name} 불러오는 중...`);
     clearPlacedObjects();
 
     const model = await loadModel(currentProduct);
@@ -529,6 +539,8 @@ async function placePreviewProduct() {
   } catch (err) {
     console.error(err);
     showToast("3D 미리보기 로드 실패");
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -741,6 +753,15 @@ function heightSelected(dy) {
 }
 
 function clearAll() {
+  if (!placedObjects.length) {
+    showToast("삭제할 제품이 없습니다.");
+    return;
+  }
+
+  if (!confirm("배치된 제품을 모두 삭제할까요?")) {
+    return;
+  }
+
   const before = snapshotScene();
   clearPlacedObjects();
   selectObject(null);
@@ -1024,4 +1045,18 @@ function showToast(message) {
   showToast.timer = setTimeout(() => {
     dom.toast.style.display = "none";
   }, 1800);
+}
+
+function setLoading(show, message = "모델 불러오는 중...") {
+  if (!dom.loadingOverlay) return;
+
+  if (dom.loadingText) {
+    dom.loadingText.textContent = message;
+  }
+
+  dom.loadingOverlay.classList.toggle("show", show);
+
+  if (dom.loadBtn) dom.loadBtn.disabled = show;
+  if (dom.placeBtn) dom.placeBtn.disabled = show;
+  if (dom.productSelect) dom.productSelect.disabled = show;
 }
