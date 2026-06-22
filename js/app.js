@@ -86,6 +86,19 @@ const AI_KIOSK_TEXTURES = {
   speakerFile: "textures/speaker-side-vertical.jpg"
 };
 
+const AI_KIOSK_OVERLAYS = {
+  screen: {
+    center: new THREE.Vector3(-0.1069, 1.265, -0.004),
+    width: 0.678,
+    height: 1.208
+  },
+  speaker: {
+    center: new THREE.Vector3(0.3697, 1.1769, 0.006),
+    width: 0.165,
+    height: 0.356
+  }
+};
+
 init();
 
 async function init() {
@@ -690,6 +703,42 @@ function applyProductTextures(product, root) {
       });
     }
   });
+
+  addAiKioskTextureOverlays(root, screenTextures, speakerTexture);
+}
+
+function addAiKioskTextureOverlays(root, screenTextures, speakerTexture) {
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(AI_KIOSK_OVERLAYS.screen.width, AI_KIOSK_OVERLAYS.screen.height),
+    new THREE.MeshBasicMaterial({
+      map: screenTextures[0],
+      toneMapped: false,
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: false
+    })
+  );
+  screen.name = "AI kiosk visible screen texture";
+  screen.position.copy(AI_KIOSK_OVERLAYS.screen.center);
+  screen.renderOrder = 30;
+  screen.userData.screenTextures = screenTextures;
+  screen.userData.textureSwapMs = TEXTURE_SWAP_MS;
+  root.add(screen);
+
+  const speaker = new THREE.Mesh(
+    new THREE.PlaneGeometry(AI_KIOSK_OVERLAYS.speaker.width, AI_KIOSK_OVERLAYS.speaker.height),
+    new THREE.MeshBasicMaterial({
+      map: speakerTexture,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: false
+    })
+  );
+  speaker.name = "AI kiosk visible speaker texture";
+  speaker.position.copy(AI_KIOSK_OVERLAYS.speaker.center);
+  speaker.renderOrder = 31;
+  root.add(speaker);
 }
 
 function loadAppTexture(url) {
@@ -1086,15 +1135,8 @@ function dataUrlToBlob(dataUrl) {
 
 function showCapturePrompt() {
   if (dom.captureHint?.querySelector("span")) {
-    dom.captureHint.querySelector("span").textContent = isArSessionActive()
-      ? "폰 자체 캡처 사용"
-      : "배치 완료";
-  }
-
-  if (dom.captureHintBtn) {
-    dom.captureHintBtn.textContent = isArSessionActive()
-      ? "📸 캡처 방법"
-      : "📸 화면저장";
+    dom.captureHint.querySelector("span").textContent =
+      "캡처: 휴대폰 전원 버튼 + 볼륨 아래 버튼";
   }
 
   if (dom.captureHint) {
