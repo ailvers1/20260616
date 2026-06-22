@@ -64,7 +64,20 @@ let isRestoringHistory = false;
 let editPanelExpanded = false;
 
 const gltfLoader = new GLTFLoader();
+const textureLoader = new THREE.TextureLoader();
 const modelCache = new Map();
+const textureCache = new Map();
+
+const TEXTURE_SWAP_MS = 3000;
+const AI_KIOSK_TEXTURES = {
+  screenMeshNames: new Set(["Object_5", "151_Object_5"]),
+  speakerMeshNames: new Set(["Object", "0_Object"]),
+  screenFiles: [
+    "textures/ai-kiosk-screen-1.jpg",
+    "textures/photo-kiosk-screen-start.jpg"
+  ],
+  speakerFile: "textures/speaker-side-vertical.jpg"
+};
 
 init();
 
@@ -604,6 +617,8 @@ function loadModel(product) {
           }
         });
 
+        applyProductTextures(product, root);
+
         modelCache.set(product.id, root);
         resolve(cloneModel(root));
       },
@@ -622,6 +637,84 @@ function prepareMaterial(material) {
   material.needsUpdate = true;
 }
 
+function applyProductTextures(product, root) {
+  if (product.id !== "ai_kiosk_white") return;
+
+  const screenTextures = AI_KIOSK_TEXTURES.screenFiles.map(loadAppTexture);
+  const speakerTexture = loadAppTexture(AI_KIOSK_TEXTURES.speakerFile);
+
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+
+    const names = new Set([child.name, child.geometry?.name].filter(Boolean));
+    const isScreen = [...names].some((name) => AI_KIOSK_TEXTURES.screenMeshNames.has(name));
+    const isSpeaker = [...names].some((name) => AI_KIOSK_TEXTURES.speakerMeshNames.has(name));
+
+    if (isScreen) {
+      child.geometry = child.geometry.clone();
+      ensurePlanarUv(child.geometry, "xy");
+      child.material = new THREE.MeshBasicMaterial({
+        map: screenTextures[0],
+        toneMapped: false,
+        side: THREE.DoubleSide
+      });
+      child.userData.screenTextures = screenTextures;
+      child.userData.textureSwapMs = TEXTURE_SWAP_MS;
+    }
+
+    if (isSpeaker) {
+      child.geometry = child.geometry.clone();
+      ensurePlanarUv(child.geometry, "xy");
+      child.material = new THREE.MeshStandardMaterial({
+        map: speakerTexture,
+        roughness: 0.72,
+        metalness: 0.0,
+        side: THREE.DoubleSide
+      });
+    }
+  });
+}
+
+function loadAppTexture(url) {
+  if (textureCache.has(url)) return textureCache.get(url);
+
+  const texture = textureLoader.load(url);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = false;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  textureCache.set(url, texture);
+  return texture;
+}
+
+function ensurePlanarUv(geometry, axes = "xy") {
+  if (geometry.getAttribute("uv")) return;
+
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const position = geometry.getAttribute("position");
+  const uv = [];
+
+  const axisA = axes[0];
+  const axisB = axes[1];
+  const indexA = axisA === "x" ? 0 : axisA === "y" ? 1 : 2;
+  const indexB = axisB === "x" ? 0 : axisB === "y" ? 1 : 2;
+  const min = [box.min.x, box.min.y, box.min.z];
+  const max = [box.max.x, box.max.y, box.max.z];
+  const sizeA = Math.max(max[indexA] - min[indexA], 0.0001);
+  const sizeB = Math.max(max[indexB] - min[indexB], 0.0001);
+
+  for (let i = 0; i < position.count; i += 1) {
+    const a = position.getComponent(i, indexA);
+    const b = position.getComponent(i, indexB);
+    uv.push((a - min[indexA]) / sizeA, 1 - (b - min[indexB]) / sizeB);
+  }
+
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+}
+
 function cloneModel(source) {
   const clone = source.clone(true);
 
@@ -637,6 +730,23 @@ function cloneModel(source) {
 
   return clone;
 }
+
+function updateDynamicTextures(timestamp = 0) {
+  const textureIndex = Math.floor(timestamp / TEXTURE_SWAP_MS) % AI_KIOSK_TEXTURES.screenFiles.length;
+
+  for (const obj of placedObjects) {
+    obj.traverse((child) => {
+      if (!child.isMesh || !child.userData.screenTextures?.length || !child.material) return;
+
+      const nextTexture = child.userData.screenTextures[textureIndex];
+      if (child.material.map === nextTexture) return;
+
+      child.material.map = nextTexture;
+      child.material.needsUpdate = true;
+    });
+  }
+}
+
 
 function selectObject(obj) {
   selectedObject = obj;
@@ -987,6 +1097,8 @@ function render(timestamp, frame) {
   if (previewMode) {
     orbitControls.update();
   }
+
+  updateDynamicTextures(timestamp);
 
   if (frame) {
     const session = renderer.xr.getSession();
