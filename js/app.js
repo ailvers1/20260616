@@ -593,7 +593,9 @@ function faceModelToCamera(model) {
 
 function loadModel(product) {
   if (modelCache.has(product.id)) {
-    return Promise.resolve(cloneModel(modelCache.get(product.id)));
+    const model = cloneModel(modelCache.get(product.id));
+    applyProductTextures(product, model);
+    return Promise.resolve(model);
   }
 
   return new Promise((resolve, reject) => {
@@ -617,10 +619,10 @@ function loadModel(product) {
           }
         });
 
-        applyProductTextures(product, root);
-
         modelCache.set(product.id, root);
-        resolve(cloneModel(root));
+        const model = cloneModel(root);
+        applyProductTextures(product, model);
+        resolve(model);
       },
       undefined,
       reject
