@@ -359,6 +359,7 @@ button:disabled {
 }
 
 #captureHint button {
+  display: none;
   padding: 5px 10px;
   background: rgba(245,158,11,.82);
   border-color: rgba(255,255,255,.36);
