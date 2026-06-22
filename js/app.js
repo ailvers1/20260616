@@ -70,7 +70,14 @@ const textureCache = new Map();
 
 const TEXTURE_SWAP_MS = 3000;
 const AI_KIOSK_TEXTURES = {
-  screenMeshNames: new Set(["Object_5", "151_Object_5"]),
+  screenMeshNames: new Set([
+    "Object_5",
+    "151_Object_5",
+    "Object_6",
+    "152_Object_6",
+    "Object_7",
+    "153_Object_7"
+  ]),
   speakerMeshNames: new Set(["Object", "0_Object"]),
   screenFiles: [
     "textures/ai-kiosk-screen-1.jpg",
