@@ -20,6 +20,7 @@ const dom = {
   scaleValue: $("scaleValue"),
   reticle: $("reticle"),
   editPanel: $("editPanel"),
+  editHeader: $("editHeader"),
   editTitle: $("editTitle"),
   editToggleBtn: $("editToggleBtn"),
   editControls: $("editControls"),
@@ -166,6 +167,13 @@ function bindEvents() {
   safeClick("redoBtn", redoLastAction);
   safeClick("editToggleBtn", toggleEditPanel);
   safeClick("captureHintBtn", captureScreen);
+
+  if (dom.editHeader) {
+    dom.editHeader.addEventListener("click", (event) => {
+      if (event.target === dom.editToggleBtn) return;
+      toggleEditPanel();
+    });
+  }
 
   safeClick("clearBtn", clearAll);
 
@@ -663,7 +671,8 @@ function updateEditPanelState() {
   if (!dom.editPanel || !dom.editToggleBtn) return;
 
   dom.editPanel.classList.toggle("collapsed", !editPanelExpanded);
-  dom.editToggleBtn.textContent = editPanelExpanded ? "닫기" : "조작";
+  dom.editToggleBtn.textContent = editPanelExpanded ? "접기" : "펼치기";
+  dom.editToggleBtn.setAttribute("aria-expanded", String(editPanelExpanded));
 }
 
 function selectByPointer(event) {
