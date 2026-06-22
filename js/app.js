@@ -69,6 +69,9 @@ const modelCache = new Map();
 const textureCache = new Map();
 
 const TEXTURE_SWAP_MS = 3000;
+const TEXTURE_FADE_MS = 320;
+const CAPTURE_HINT_MS = 4200;
+let captureHintTimer = null;
 const AI_KIOSK_TEXTURES = {
   screenMeshNames: new Set([
     "Object_5",
@@ -686,7 +689,9 @@ function applyProductTextures(product, root) {
       child.material = new THREE.MeshBasicMaterial({
         map: screenTextures[0],
         toneMapped: false,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 1
       });
       child.userData.screenTextures = screenTextures;
       child.userData.textureSwapMs = TEXTURE_SWAP_MS;
@@ -715,7 +720,9 @@ function addAiKioskTextureOverlays(root, screenTextures, speakerTexture) {
       toneMapped: false,
       side: THREE.DoubleSide,
       depthTest: true,
-      depthWrite: false
+      depthWrite: false,
+      transparent: true,
+      opacity: 1
     })
   );
   screen.name = "AI kiosk visible screen texture";
@@ -803,16 +810,25 @@ function cloneModel(source) {
 
 function updateDynamicTextures(timestamp = 0) {
   const textureIndex = Math.floor(timestamp / TEXTURE_SWAP_MS) % AI_KIOSK_TEXTURES.screenFiles.length;
+  const phase = timestamp % TEXTURE_SWAP_MS;
+  const fadeOut = phase > TEXTURE_SWAP_MS - TEXTURE_FADE_MS
+    ? (TEXTURE_SWAP_MS - phase) / TEXTURE_FADE_MS
+    : 1;
+  const fadeIn = phase < TEXTURE_FADE_MS ? phase / TEXTURE_FADE_MS : 1;
+  const opacity = Math.max(0.18, Math.min(fadeOut, fadeIn, 1));
 
   for (const obj of placedObjects) {
     obj.traverse((child) => {
       if (!child.isMesh || !child.userData.screenTextures?.length || !child.material) return;
 
       const nextTexture = child.userData.screenTextures[textureIndex];
-      if (child.material.map === nextTexture) return;
+      child.material.transparent = true;
+      child.material.opacity = opacity;
 
-      child.material.map = nextTexture;
-      child.material.needsUpdate = true;
+      if (child.material.map !== nextTexture) {
+        child.material.map = nextTexture;
+        child.material.needsUpdate = true;
+      }
     });
   }
 }
@@ -1143,6 +1159,8 @@ function showCapturePrompt() {
     dom.captureHint.classList.add("show");
   }
 
+  clearTimeout(captureHintTimer);
+  captureHintTimer = setTimeout(hideCapturePrompt, CAPTURE_HINT_MS);
 }
 
 function hideCapturePrompt() {
@@ -1150,6 +1168,8 @@ function hideCapturePrompt() {
     dom.captureHint.classList.remove("show");
   }
 
+  clearTimeout(captureHintTimer);
+  captureHintTimer = null;
 }
 
 function animate() {
