@@ -195,18 +195,21 @@ button:disabled {
 
 #editPanel {
   position: fixed;
-  left: 12px;
-  bottom: 18px;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
   z-index: 25;
   display: none;
   flex-direction: column;
   gap: 10px;
-  width: 190px;
+  width: min(238px, calc(100vw - 28px));
   padding: 12px;
-  border-radius: 12px;
-  background: rgba(0,0,0,.84);
+  transform: translateX(-50%);
+  border-radius: 18px;
+  background: rgba(0,0,0,.78);
   color: white;
   border: 1px solid rgba(255,255,255,.25);
+  box-shadow: 0 14px 34px rgba(0,0,0,.36);
+  backdrop-filter: blur(14px);
 }
 
 #editPanel.show {
@@ -214,7 +217,9 @@ button:disabled {
 }
 
 #editPanel.collapsed {
-  width: min(260px, calc(100vw - 24px));
+  width: min(256px, calc(100vw - 28px));
+  padding: 9px 10px;
+  border-radius: 999px;
 }
 
 #editPanel.collapsed #editControls {
@@ -226,6 +231,8 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  cursor: pointer;
+  user-select: none;
 }
 
 #editTitle {
@@ -241,32 +248,63 @@ button:disabled {
 #editToggleBtn {
   flex: 0 0 auto;
   border-radius: 999px;
-  padding: 6px 10px;
+  min-width: 58px;
+  padding: 7px 10px;
   background: rgba(14,165,233,.74);
   font-weight: 800;
 }
 
+.collapsed #editToggleBtn {
+  background: rgba(255,255,255,.18);
+}
+
+#editControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
 .pad {
   display: grid;
-  grid-template-columns: 42px 42px 42px;
-  gap: 6px;
+  grid-template-columns: 48px 48px 48px;
+  grid-template-rows: 48px 48px 48px;
+  gap: 7px;
   justify-content: center;
+}
+
+.pad button {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 16px;
+  font-size: 18px;
+  font-weight: 900;
 }
 
 #moveForward {
   grid-column: 2;
+  grid-row: 1;
 }
 
 #moveLeft {
   grid-column: 1;
+  grid-row: 2;
 }
 
 #moveRight {
   grid-column: 3;
+  grid-row: 2;
 }
 
 #moveBack {
   grid-column: 2;
+  grid-row: 3;
+}
+
+#editControls .row.small {
+  justify-content: center;
+  width: 100%;
 }
 
 .row.small button {
@@ -400,7 +438,23 @@ button:disabled {
   }
 
   #editPanel {
-    width: 176px;
+    width: min(224px, calc(100vw - 24px));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+
+  #editPanel.collapsed {
+    width: min(232px, calc(100vw - 24px));
+  }
+
+  .pad {
+    grid-template-columns: 44px 44px 44px;
+    grid-template-rows: 44px 44px 44px;
+  }
+
+  .pad button {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
   }
 }
 
@@ -442,9 +496,10 @@ button:disabled {
   }
 
   #editPanel {
-    left: auto;
-    right: 12px;
-    bottom: 12px;
+    left: 50%;
+    right: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    transform: translateX(-50%);
   }
 
   #toast {
