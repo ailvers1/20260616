@@ -83,7 +83,7 @@ const AI_KIOSK_TEXTURES = {
     "textures/ai-kiosk-screen-1.jpg",
     "textures/photo-kiosk-screen-start.jpg"
   ],
-  speakerFile: "textures/speaker-side-vertical.jpg"
+  speakerFile: "textures/speaker-side-vertical.png"
 };
 
 const AI_KIOSK_OVERLAYS = {
