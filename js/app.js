@@ -8,6 +8,9 @@ const dom = {
   startScreen: $("startScreen"),
   startBtnBig: $("startBtnBig"),
   previewBtnBig: $("previewBtnBig"),
+  photoPreviewBg: $("photoPreviewBg"),
+  photoInput: $("photoInput"),
+  photoPreviewHint: $("photoPreviewHint"),
   topBar: $("topBar"),
   productSelect: $("productSelect"),
   loadBtn: $("loadBtn"),
@@ -53,6 +56,8 @@ let hitTestSource = null;
 let hitTestSourceRequested = false;
 let arReferenceSpaceType = "local";
 let previewMode = false;
+let photoPreviewMode = false;
+let photoPreviewObjectUrl = null;
 
 let products = [];
 let currentProduct = null;
@@ -62,6 +67,8 @@ let historyStack = [];
 let redoStack = [];
 let isRestoringHistory = false;
 let editPanelExpanded = false;
+const previewPointers = new Map();
+let previewGesture = null;
 
 const gltfLoader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
@@ -188,7 +195,7 @@ function setupPreviewHelpers() {
 function bindEvents() {
   safeClick("startBtnBig", startAR);
   safeClick("previewBtnBig", () => {
-    startPreview("3D 미리보기 모드입니다. 화면을 드래그해서 제품을 회전할 수 있습니다.");
+    requestPhotoPreview();
   });
 
   safeClick("loadBtn", async () => {
@@ -255,6 +262,12 @@ function bindEvents() {
   }
 
   renderer.domElement.addEventListener("pointerdown", selectByPointer);
+  renderer.domElement.addEventListener("pointerdown", onPhotoPreviewPointerDown);
+  renderer.domElement.addEventListener("pointermove", onPhotoPreviewPointerMove);
+  renderer.domElement.addEventListener("pointerup", onPhotoPreviewPointerEnd);
+  renderer.domElement.addEventListener("pointercancel", onPhotoPreviewPointerEnd);
+
+  dom.photoInput?.addEventListener("change", handlePhotoPreviewFile);
 }
 
 function safeClick(id, handler) {
@@ -397,6 +410,9 @@ async function startAR() {
     await renderer.xr.setSession(session);
 
     previewMode = false;
+    photoPreviewMode = false;
+    dom.photoPreviewBg?.classList.remove("show");
+    dom.photoPreviewHint?.classList.remove("show");
     orbitControls.enabled = false;
     previewGrid.visible = false;
     dom.startScreen.classList.add("hidden");
@@ -463,18 +479,52 @@ async function chooseReferenceSpaceType(session) {
 
 async function startPreview(message) {
   previewMode = true;
+  photoPreviewMode = true;
   hitTestSourceRequested = false;
   hitTestSource = null;
   reticleObject.visible = false;
-  previewGrid.visible = true;
-  orbitControls.enabled = true;
+  previewGrid.visible = false;
+  orbitControls.enabled = false;
 
   dom.startScreen.classList.add("hidden");
   dom.topBar.classList.add("show");
   dom.reticle.style.display = "none";
+  dom.photoPreviewBg?.classList.add("show");
+  dom.photoPreviewHint?.classList.add("show");
 
   await placePreviewProduct();
   showToast(message);
+}
+
+function requestPhotoPreview() {
+  if (!dom.photoInput) {
+    startPreview("사진 배경 미리보기 모드입니다.");
+    return;
+  }
+
+  dom.photoInput.value = "";
+  dom.photoInput.click();
+}
+
+function handlePhotoPreviewFile(event) {
+  const file = event.target.files?.[0];
+
+  if (!file) {
+    showToast("사진을 선택하면 미리보기를 시작합니다.");
+    return;
+  }
+
+  if (photoPreviewObjectUrl) {
+    URL.revokeObjectURL(photoPreviewObjectUrl);
+  }
+
+  photoPreviewObjectUrl = URL.createObjectURL(file);
+
+  if (dom.photoPreviewBg) {
+    dom.photoPreviewBg.style.backgroundImage = `url("${photoPreviewObjectUrl}")`;
+  }
+
+  startPreview("사진 위에 제품을 올렸습니다.");
 }
 
 async function preloadCurrentProduct() {
@@ -577,8 +627,8 @@ async function placePreviewProduct() {
 
     scene.add(model);
     placedObjects.push(model);
+    framePhotoPreviewCamera(model);
     selectObject(model);
-    framePreviewCamera(model);
     recordHistory(before);
   } catch (err) {
     console.error(err);
@@ -598,6 +648,24 @@ function framePreviewCamera(model) {
   camera.position.set(center.x, center.y + radius * 0.35, center.z + radius * 1.8);
   camera.lookAt(center);
   orbitControls.update();
+}
+
+function framePhotoPreviewCamera(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxSize = Math.max(size.x, size.y, size.z, 1);
+  const targetHeight = 1.95;
+  const scale = targetHeight / maxSize;
+
+  model.position.sub(center);
+  model.position.y -= 0.12;
+  model.scale.setScalar(scale);
+  model.rotation.x = 0;
+
+  camera.position.set(0, 0.95, 4.2);
+  camera.lookAt(0, 0.95, 0);
+  camera.updateProjectionMatrix();
 }
 
 function faceModelToCamera(model) {
@@ -857,6 +925,125 @@ function selectObject(obj) {
   dom.scaleValue.textContent = `${scalePct}%`;
 }
 
+function onPhotoPreviewPointerDown(event) {
+  if (!photoPreviewMode || !selectedObject) return;
+
+  event.preventDefault();
+  previewPointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY
+  });
+
+  try {
+    renderer.domElement.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Some mobile browsers manage capture automatically.
+  }
+
+  previewGesture = getPhotoPreviewGestureState();
+}
+
+function onPhotoPreviewPointerMove(event) {
+  if (!photoPreviewMode || !selectedObject || !previewPointers.has(event.pointerId)) return;
+
+  event.preventDefault();
+  const point = previewPointers.get(event.pointerId);
+  point.x = event.clientX;
+  point.y = event.clientY;
+
+  const pointers = [...previewPointers.values()];
+
+  if (pointers.length >= 2 && previewGesture?.type === "pinch") {
+    const current = getTwoPointerMetrics(pointers[0], pointers[1]);
+    const scaleRatio = current.distance / Math.max(previewGesture.distance, 1);
+    const nextScale = THREE.MathUtils.clamp(previewGesture.scale * scaleRatio, 0.25, 2.6);
+    const delta = screenDeltaToWorld(
+      current.center.x - previewGesture.center.x,
+      current.center.y - previewGesture.center.y,
+      selectedObject.position
+    );
+
+    selectedObject.position.copy(previewGesture.position).add(delta);
+    selectedObject.scale.setScalar(nextScale);
+    selectedObject.rotation.z = previewGesture.rotationZ + current.angle - previewGesture.angle;
+    syncScaleControl(nextScale);
+  } else if (pointers.length === 1) {
+    const dx = point.x - point.lastX;
+    const dy = point.y - point.lastY;
+    selectedObject.position.add(screenDeltaToWorld(dx, dy, selectedObject.position));
+  }
+
+  point.lastX = point.x;
+  point.lastY = point.y;
+}
+
+function onPhotoPreviewPointerEnd(event) {
+  if (!photoPreviewMode) return;
+
+  previewPointers.delete(event.pointerId);
+
+  try {
+    renderer.domElement.releasePointerCapture?.(event.pointerId);
+  } catch {
+    // Pointer capture may already be released.
+  }
+
+  previewGesture = getPhotoPreviewGestureState();
+}
+
+function getPhotoPreviewGestureState() {
+  if (!selectedObject) return null;
+
+  const pointers = [...previewPointers.values()];
+
+  if (pointers.length >= 2) {
+    const metrics = getTwoPointerMetrics(pointers[0], pointers[1]);
+    return {
+      type: "pinch",
+      ...metrics,
+      position: selectedObject.position.clone(),
+      scale: selectedObject.scale.x,
+      rotationZ: selectedObject.rotation.z
+    };
+  }
+
+  return { type: "drag" };
+}
+
+function getTwoPointerMetrics(a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+
+  return {
+    center: {
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2
+    },
+    distance: Math.hypot(dx, dy),
+    angle: Math.atan2(dy, dx)
+  };
+}
+
+function screenDeltaToWorld(dx, dy, referencePosition) {
+  const distance = Math.max(camera.position.distanceTo(referencePosition), 0.5);
+  const visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance;
+  const visibleWidth = visibleHeight * camera.aspect;
+
+  return new THREE.Vector3(
+    (dx / window.innerWidth) * visibleWidth,
+    (-dy / window.innerHeight) * visibleHeight,
+    0
+  );
+}
+
+function syncScaleControl(scale) {
+  const pct = Math.round(scale * 100);
+  dom.scaleRange.value = pct;
+  dom.scaleValue.textContent = `${pct}%`;
+}
+
 function toggleEditPanel() {
   if (!selectedObject) {
     showToast("조작할 제품을 먼저 선택하세요.");
@@ -876,6 +1063,7 @@ function updateEditPanelState() {
 }
 
 function selectByPointer(event) {
+  if (photoPreviewMode) return;
   if (!placedObjects.length) return;
 
   const rect = renderer.domElement.getBoundingClientRect();
