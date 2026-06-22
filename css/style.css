@@ -507,6 +507,30 @@ button:disabled {
     right: auto;
     bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
     transform: translateX(-50%);
+    width: 206px;
+    padding: 9px;
+    gap: 7px;
+  }
+
+  #editPanel.collapsed {
+    width: 220px;
+    padding: 7px 9px;
+  }
+
+  .pad {
+    grid-template-columns: 40px 40px 40px;
+    grid-template-rows: 40px 40px 40px;
+    gap: 5px;
+  }
+
+  .pad button {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  #editControls {
+    gap: 7px;
   }
 
   #toast {
